@@ -49,11 +49,16 @@ type PhilipsData struct {
 	RepBeats map[string][]int16
 
 	// Global measurements
-	HeartRate   float64
-	PRInterval  float64
-	QRSDuration float64
-	QTInterval  float64
-	QTcInterval float64
+	HeartRate    float64
+	PRInterval   float64
+	QRSDuration  float64
+	QTInterval   float64
+	QTcInterval  float64
+	AtrialRate   float64
+	PFrontAxis   float64 // degrees
+	QRSFrontAxis float64 // degrees
+	TFrontAxis   float64 // degrees
+	QTDispersion float64 // ms
 }
 
 const philipsNamespace = "http://www3.medical.philips.com"
@@ -151,6 +156,11 @@ func ParsePhilips(path string) (*PhilipsData, error) {
 	d.QRSDuration = parseFloat(px.Measurements.Global.MeanQRS)
 	d.QTInterval = parseFloat(px.Measurements.Global.MeanQT)
 	d.QTcInterval = parseFloat(px.Measurements.Global.MeanQTc)
+	d.AtrialRate = parseFloat(px.Measurements.Global.AtrialRate)
+	d.PFrontAxis = parseFloat(px.Measurements.Global.PFrontAxis)
+	d.QRSFrontAxis = parseFloat(px.Measurements.Global.QRSFrontAxis)
+	d.TFrontAxis = parseFloat(px.Measurements.Global.TFrontAxis)
+	d.QTDispersion = parseFloat(px.Measurements.Global.QTDispersion)
 
 	return d, nil
 }
