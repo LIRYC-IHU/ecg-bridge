@@ -132,8 +132,12 @@ func ParsePhilips(path string) (*PhilipsData, error) {
 	}
 	d.Baseline = parseFloat(px.DataAcq.Signal.SignalOffset)
 
-	// Filters: signalbandwidth "0.05-150" → HPF=0.05, LPF=150
-	d.FilterHPF, d.FilterLPF = parseBandwidth(px.DataAcq.Signal.Bandwidth)
+	// Filters: hipass/lowpass explicit fields take priority over signalbandwidth "0.05-150"
+	d.FilterHPF = parseFloat(px.DataAcq.Signal.HiPass)
+	d.FilterLPF = parseFloat(px.DataAcq.Signal.LowPass)
+	if d.FilterHPF == 0 && d.FilterLPF == 0 {
+		d.FilterHPF, d.FilterLPF = parseBandwidth(px.DataAcq.Signal.Bandwidth)
+	}
 	notch := strings.TrimSpace(px.DataAcq.Signal.AcSetting)
 	if notch == "" {
 		notch = strings.TrimSpace(px.ReportInfo.Bandwidth.Notch)
