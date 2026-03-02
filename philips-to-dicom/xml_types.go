@@ -61,6 +61,8 @@ type Acquirer struct {
 type SignalChar struct {
 	SamplingRate  string `xml:"samplingrate"`
 	Resolution    string `xml:"signalresolution"`
+	HiPass        string `xml:"hipass"`
+	LowPass       string `xml:"lowpass"`
 	Bandwidth     string `xml:"signalbandwidth"`
 	AcSetting     string `xml:"acsetting"`
 	BitsPerSample string `xml:"bitspersample"`
