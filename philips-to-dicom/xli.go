@@ -19,24 +19,19 @@ const (
 )
 
 // decodeRhythmLeads decodes the XLI-compressed parsedwaveforms block into 12 leads.
-func decodeRhythmLeads(pw ParsedWaveforms, version string) ([12][]int16, error) {
+func decodeRhythmLeads(pw ParsedWaveforms) ([12][]int16, error) {
 	if !strings.EqualFold(pw.DataEncoding, "Base64") {
 		return [12][]int16{}, fmt.Errorf("unsupported data encoding: %q", pw.DataEncoding)
-	}
-
-	isCompressed := false
-	if version == "1.04" && pw.CompressMethod == "XLI" {
-		isCompressed = true
-	} else if version == "1.03" && strings.EqualFold(pw.CompressFlag, "True") && pw.CompressMethod == "XLI" {
-		isCompressed = true
-	}
-	if !isCompressed {
-		return [12][]int16{}, fmt.Errorf("only XLI compression is supported")
 	}
 
 	decoded, err := base64.StdEncoding.DecodeString(pw.Data)
 	if err != nil {
 		return [12][]int16{}, fmt.Errorf("base64 decode: %w", err)
+	}
+
+	// Detect XLI by magic byte (0x7F) — v1.04.x omits compressmethod attribute.
+	if len(decoded) == 0 || decoded[0] != 0x7F {
+		return [12][]int16{}, fmt.Errorf("only XLI compression is supported (expected magic 0x7F, got 0x%02X)", decoded[0])
 	}
 
 	var leads [12][]int16

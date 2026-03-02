@@ -89,7 +89,7 @@ func ParsePhilips(path string) (*PhilipsData, error) {
 	}
 
 	version := px.DocumentInfo.Version
-	if version != "1.03" && version != "1.04" {
+	if !strings.HasPrefix(version, "1.03") && !strings.HasPrefix(version, "1.04") {
 		return nil, fmt.Errorf("unsupported SierraECG version: %s", version)
 	}
 
@@ -136,7 +136,7 @@ func ParsePhilips(path string) (*PhilipsData, error) {
 	d.NotchFilter = parseFloat(notch)
 
 	// Rhythm waveforms — XLI decode
-	leads, err := decodeRhythmLeads(px.Waveforms.ParsedWaveforms, version)
+	leads, err := decodeRhythmLeads(px.Waveforms.ParsedWaveforms)
 	if err != nil {
 		return nil, fmt.Errorf("decoding rhythm waveforms: %w", err)
 	}
