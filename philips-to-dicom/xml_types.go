@@ -83,10 +83,15 @@ type Measurements struct {
 }
 
 type GlobalMeasurements struct {
-	MeanPR  string `xml:"meanprint"`
-	MeanQRS string `xml:"meanqrsdur"`
-	MeanQT  string `xml:"meanqtint"`
-	MeanQTc string `xml:"meanqtc"`
+	MeanPR       string `xml:"meanprint"`
+	MeanQRS      string `xml:"meanqrsdur"`
+	MeanQT       string `xml:"meanqtint"`
+	MeanQTc      string `xml:"meanqtc"`
+	PFrontAxis   string `xml:"pfrontaxis"`
+	QRSFrontAxis string `xml:"qrsfrontaxis"`
+	TFrontAxis   string `xml:"tfrontaxis"`
+	AtrialRate   string `xml:"atrialrate"`
+	QTDispersion string `xml:"qtintdispersion"`
 }
 
 type Interpretations struct {
