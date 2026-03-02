@@ -41,8 +41,12 @@ func BuildDICOM(d *PhilipsData) (dicom.Dataset, error) {
 	// ─── Patient / study / device ───────────────────────────────────────────
 	add(&ds, tag.SOPClassUID, []string{sopClassUID12LeadECG})
 	add(&ds, tag.SOPInstanceUID, []string{d.StudyUID})
+	add(&ds, tag.Modality, []string{"ECG"})
 	add(&ds, tag.StudyDate, []string{d.StudyDate})
 	add(&ds, tag.StudyTime, []string{d.StudyTime})
+	add(&ds, tag.ContentDate, []string{d.StudyDate})
+	add(&ds, tag.ContentTime, []string{d.StudyTime})
+	add(&ds, tag.AcquisitionDateTime, []string{d.StudyDate + d.StudyTime})
 	add(&ds, tag.Manufacturer, []string{d.Manufacturer})
 	add(&ds, tag.InstitutionName, []string{d.InstitutionName})
 	add(&ds, tag.ManufacturerModelName, []string{d.ModelName})
@@ -53,6 +57,10 @@ func BuildDICOM(d *PhilipsData) (dicom.Dataset, error) {
 	add(&ds, tag.PatientSex, []string{d.PatientSex})
 	add(&ds, tag.PatientAge, []string{d.PatientAge})
 	add(&ds, tag.StudyInstanceUID, []string{d.StudyUID})
+	add(&ds, tag.SeriesInstanceUID, []string{d.StudyUID + ".1"})
+	add(&ds, tag.StudyID, []string{"1"})
+	add(&ds, tag.SeriesNumber, []string{"1"})
+	add(&ds, tag.InstanceNumber, []string{"1"})
 
 	// ─── WaveformSequence ───────────────────────────────────────────────────
 	originalItem, err := buildWaveformItem(d, "ORIGINAL", "RHYTHM", d.RhythmLeads[:], 5500)
@@ -183,6 +191,7 @@ func buildChannelDef(leadName string, d *PhilipsData) ([]*dicom.Element, error) 
 		mustElem(tag.ChannelSensitivityCorrectionFactor, []string{"1"}),
 		mustElem(tag.ChannelBaseline, []string{fmtFloat(d.Baseline)}),
 		mustElem(tag.ChannelSampleSkew, []string{"0"}),
+		mustElem(tag.WaveformBitsStored, []int{d.BitsPerSample}),
 		mustElem(tag.FilterLowFrequency, []string{fmtFloat(d.FilterHPF)}),
 		mustElem(tag.FilterHighFrequency, []string{fmtFloat(d.FilterLPF)}),
 	}
@@ -194,7 +203,7 @@ func buildChannelDef(leadName string, d *PhilipsData) ([]*dicom.Element, error) 
 	return ch, nil
 }
 
-// buildAnnotations creates WaveformAnnotationSequence items for the 5 global measurements.
+// buildAnnotations creates WaveformAnnotationSequence items for global measurements.
 func buildAnnotations(d *PhilipsData) ([][]*dicom.Element, error) {
 	type measurement struct {
 		codeValue   string
@@ -210,6 +219,11 @@ func buildAnnotations(d *PhilipsData) ([][]*dicom.Element, error) {
 		{"8633-7", "QRS Duration", d.QRSDuration, "ms", "ms"},
 		{"8634-5", "QT Interval", d.QTInterval, "ms", "ms"},
 		{"8636-0", "QTc Interval", d.QTcInterval, "ms", "ms"},
+		{"8639-5", "Atrial Rate", d.AtrialRate, "/min", "/min"},
+		{"8626-1", "P-wave Axis", d.PFrontAxis, "deg", "deg"},
+		{"8632-9", "QRS Axis", d.QRSFrontAxis, "deg", "deg"},
+		{"8638-7", "T-wave Axis", d.TFrontAxis, "deg", "deg"},
+		{"8640-3", "QT Dispersion", d.QTDispersion, "ms", "ms"},
 	}
 
 	var items [][]*dicom.Element
