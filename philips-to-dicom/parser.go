@@ -56,11 +56,31 @@ type PhilipsData struct {
 	QTcInterval float64
 }
 
+const philipsNamespace = "http://www3.medical.philips.com"
+
+// validatePhilipsXML vérifie que le contenu XML est bien un fichier Philips SierraECG.
+func validatePhilipsXML(raw []byte) error {
+	// Scan rapide des 4 Ko pour éviter de tout parser
+	head := raw
+	if len(head) > 4096 {
+		head = raw[:4096]
+	}
+	s := string(head)
+	if !strings.Contains(s, philipsNamespace) {
+		return fmt.Errorf("not a Philips SierraECG XML file (namespace %q not found)", philipsNamespace)
+	}
+	return nil
+}
+
 // ParsePhilips reads a Philips SierraECG XML file and returns a PhilipsData.
 func ParsePhilips(path string) (*PhilipsData, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("reading file: %w", err)
+	}
+
+	if err := validatePhilipsXML(raw); err != nil {
+		return nil, err
 	}
 
 	var px PhilipsXML
