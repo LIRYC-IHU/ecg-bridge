@@ -214,6 +214,9 @@ func addAnnotations(h *hl7aecg.Hl7xml, d *philipstodicom.PhilipsData, studyDT st
 	if d.PRInterval > 0 {
 		annSet.AddPRInterval(d.PRInterval)
 	}
+	if d.RRInterval > 0 {
+		annSet.AddRRInterval(d.RRInterval)
+	}
 	if d.QRSDuration > 0 {
 		annSet.AddQRSDuration(d.QRSDuration)
 	}
@@ -224,7 +227,7 @@ func addAnnotations(h *hl7aecg.Hl7xml, d *philipstodicom.PhilipsData, studyDT st
 		annSet.AddQTcInterval(d.QTcInterval)
 	}
 	if d.AtrialRate > 0 {
-		annSet.AddAnnotation("MDC_ECG_ATRIAL_RATE", string(types.MDC_OID), d.AtrialRate, "bpm")
+		annSet.AddAtrialRate(d.AtrialRate)
 	}
 	if d.PFrontAxis != 0 {
 		annSet.AddAnnotation(string(types.MDC_ECG_ANGLE_P_FRONT), string(types.MDC_OID), d.PFrontAxis, "deg")
@@ -235,7 +238,10 @@ func addAnnotations(h *hl7aecg.Hl7xml, d *philipstodicom.PhilipsData, studyDT st
 	if d.TFrontAxis != 0 {
 		annSet.AddAnnotation(string(types.MDC_ECG_ANGLE_T_FRONT), string(types.MDC_OID), d.TFrontAxis, "deg")
 	}
+	if d.STFrontAxis != 0 {
+		annSet.AddSTAxis(d.STFrontAxis)
+	}
 	if d.QTDispersion > 0 {
-		annSet.AddAnnotation("MDC_ECG_TIME_PD_QT_DISPERSION", string(types.MDC_OID), d.QTDispersion, "ms")
+		annSet.AddQTDispersion(d.QTDispersion)
 	}
 }

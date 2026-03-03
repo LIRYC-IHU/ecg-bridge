@@ -88,9 +88,16 @@ func printDebug(d *philipstodicom.PhilipsData) {
 	fmt.Fprintf(os.Stderr, "RepBeats:     %d leads\n", len(d.RepBeats))
 	fmt.Fprintf(os.Stderr, "HeartRate:    %.0f /min\n", d.HeartRate)
 	fmt.Fprintf(os.Stderr, "PRInterval:   %.0f ms\n", d.PRInterval)
+	fmt.Fprintf(os.Stderr, "RRInterval:   %.0f ms\n", d.RRInterval)
 	fmt.Fprintf(os.Stderr, "QRSDuration:  %.0f ms\n", d.QRSDuration)
 	fmt.Fprintf(os.Stderr, "QTInterval:   %.0f ms\n", d.QTInterval)
 	fmt.Fprintf(os.Stderr, "QTcInterval:  %.0f ms\n", d.QTcInterval)
+	fmt.Fprintf(os.Stderr, "AtrialRate:   %.0f /min\n", d.AtrialRate)
+	fmt.Fprintf(os.Stderr, "PFrontAxis:   %g°\n", d.PFrontAxis)
+	fmt.Fprintf(os.Stderr, "QRSFrontAxis: %g°\n", d.QRSFrontAxis)
+	fmt.Fprintf(os.Stderr, "TFrontAxis:   %g°\n", d.TFrontAxis)
+	fmt.Fprintf(os.Stderr, "STFrontAxis:  %g°\n", d.STFrontAxis)
+	fmt.Fprintf(os.Stderr, "QTDispersion: %.0f ms\n", d.QTDispersion)
 	fmt.Fprintln(os.Stderr, "=========================")
 }
 
