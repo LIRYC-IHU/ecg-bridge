@@ -86,6 +86,7 @@ func printDebug(d *philipstodicom.PhilipsData) {
 	fmt.Fprintf(os.Stderr, "NotchFilter:  %g Hz\n", d.NotchFilter)
 	fmt.Fprintf(os.Stderr, "HeartRate:    %g bpm\n", d.HeartRate)
 	fmt.Fprintf(os.Stderr, "PRInterval:   %g ms\n", d.PRInterval)
+	fmt.Fprintf(os.Stderr, "RRInterval:   %g ms\n", d.RRInterval)
 	fmt.Fprintf(os.Stderr, "QRSDuration:  %g ms\n", d.QRSDuration)
 	fmt.Fprintf(os.Stderr, "QTInterval:   %g ms\n", d.QTInterval)
 	fmt.Fprintf(os.Stderr, "QTcInterval:  %g ms\n", d.QTcInterval)
@@ -93,6 +94,7 @@ func printDebug(d *philipstodicom.PhilipsData) {
 	fmt.Fprintf(os.Stderr, "PFrontAxis:   %g°\n", d.PFrontAxis)
 	fmt.Fprintf(os.Stderr, "QRSFrontAxis: %g°\n", d.QRSFrontAxis)
 	fmt.Fprintf(os.Stderr, "TFrontAxis:   %g°\n", d.TFrontAxis)
+	fmt.Fprintf(os.Stderr, "STFrontAxis:  %g°\n", d.STFrontAxis)
 	fmt.Fprintf(os.Stderr, "QTDispersion: %g ms\n", d.QTDispersion)
 	for i, lead := range d.RhythmLeads {
 		fmt.Fprintf(os.Stderr, "Lead[%d]: %d samples\n", i, len(lead))
