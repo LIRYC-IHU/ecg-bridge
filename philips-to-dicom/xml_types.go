@@ -81,7 +81,13 @@ type ReportBandwidth struct {
 }
 
 type Measurements struct {
-	Global GlobalMeasurements `xml:"globalmeasurements"`
+	Global        GlobalMeasurements `xml:"globalmeasurements"`
+	GroupMeasures GroupMeasurements  `xml:"groupmeasurements"`
+}
+
+// GroupMeasurements wraps the groupmeasurements container.
+type GroupMeasurements struct {
+	Items []GroupMeasurement `xml:"groupmeasurement"`
 }
 
 type GlobalMeasurements struct {
@@ -92,8 +98,14 @@ type GlobalMeasurements struct {
 	PFrontAxis   string `xml:"pfrontaxis"`
 	QRSFrontAxis string `xml:"qrsfrontaxis"`
 	TFrontAxis   string `xml:"tfrontaxis"`
+	STFrontAxis  string `xml:"stfrontaxis"`
 	AtrialRate   string `xml:"atrialrate"`
 	QTDispersion string `xml:"qtintdispersion"`
+}
+
+// GroupMeasurement holds per-group measurements.
+type GroupMeasurement struct {
+	MeanRRInt string `xml:"meanrrint"`
 }
 
 type Interpretations struct {
