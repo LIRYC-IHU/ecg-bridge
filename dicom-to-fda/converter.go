@@ -286,45 +286,6 @@ func buildLeadsMap(wf WaveformGroup) (map[types.LeadCode][]int, float64, float64
 		}
 	}
 
-	// Auto-compute missing derived leads when Lead I and Lead II are present.
-	// Einthoven's triangle:  III  = II - I
-	// Goldberger augmented:  aVR  = -(I + II) / 2
-	//                        aVL  = (2·I  - II) / 2
-	//                        aVF  = (2·II - I)  / 2
-	leadI, hasI := leads[types.MDC_ECG_LEAD_I]
-	leadII, hasII := leads[types.MDC_ECG_LEAD_II]
-	if hasI && hasII {
-		n := len(leadI)
-		if _, ok := leads[types.MDC_ECG_LEAD_III]; !ok {
-			s := make([]int, n)
-			for i := range s {
-				s[i] = leadII[i] - leadI[i]
-			}
-			leads[types.MDC_ECG_LEAD_III] = s
-		}
-		if _, ok := leads[types.MDC_ECG_LEAD_AVR]; !ok {
-			s := make([]int, n)
-			for i := range s {
-				s[i] = int(math.Round(float64(-leadI[i]-leadII[i]) / 2.0))
-			}
-			leads[types.MDC_ECG_LEAD_AVR] = s
-		}
-		if _, ok := leads[types.MDC_ECG_LEAD_AVL]; !ok {
-			s := make([]int, n)
-			for i := range s {
-				s[i] = int(math.Round(float64(2*leadI[i]-leadII[i]) / 2.0))
-			}
-			leads[types.MDC_ECG_LEAD_AVL] = s
-		}
-		if _, ok := leads[types.MDC_ECG_LEAD_AVF]; !ok {
-			s := make([]int, n)
-			for i := range s {
-				s[i] = int(math.Round(float64(2*leadII[i]-leadI[i]) / 2.0))
-			}
-			leads[types.MDC_ECG_LEAD_AVF] = s
-		}
-	}
-
 	return leads, commonScale, 0.0
 }
 
