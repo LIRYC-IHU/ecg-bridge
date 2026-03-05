@@ -51,6 +51,7 @@ type PhilipsData struct {
 	// Global measurements
 	HeartRate    float64
 	PRInterval   float64
+	RRInterval   float64 // ms
 	QRSDuration  float64
 	QTInterval   float64
 	QTcInterval  float64
@@ -58,6 +59,7 @@ type PhilipsData struct {
 	PFrontAxis   float64 // degrees
 	QRSFrontAxis float64 // degrees
 	TFrontAxis   float64 // degrees
+	STFrontAxis  float64 // degrees
 	QTDispersion float64 // ms
 }
 
@@ -164,7 +166,12 @@ func ParsePhilips(path string) (*PhilipsData, error) {
 	d.PFrontAxis = parseFloat(px.Measurements.Global.PFrontAxis)
 	d.QRSFrontAxis = parseFloat(px.Measurements.Global.QRSFrontAxis)
 	d.TFrontAxis = parseFloat(px.Measurements.Global.TFrontAxis)
+	d.STFrontAxis = parseFloat(px.Measurements.Global.STFrontAxis)
 	d.QTDispersion = parseFloat(px.Measurements.Global.QTDispersion)
+	// RR interval: taken from first groupmeasurement
+	if len(px.Measurements.GroupMeasures.Items) > 0 {
+		d.RRInterval = parseFloat(px.Measurements.GroupMeasures.Items[0].MeanRRInt)
+	}
 
 	return d, nil
 }
