@@ -216,6 +216,7 @@ func buildAnnotations(d *PhilipsData) ([][]*dicom.Element, error) {
 	measurements := []measurement{
 		{"8867-4", "Heart Rate", d.HeartRate, "/min", "/min"},
 		{"8625-3", "PR Interval", d.PRInterval, "ms", "ms"},
+		{"8625-6", "RR Interval", d.RRInterval, "ms", "ms"},
 		{"8633-7", "QRS Duration", d.QRSDuration, "ms", "ms"},
 		{"8634-5", "QT Interval", d.QTInterval, "ms", "ms"},
 		{"8636-0", "QTc Interval", d.QTcInterval, "ms", "ms"},
@@ -223,6 +224,7 @@ func buildAnnotations(d *PhilipsData) ([][]*dicom.Element, error) {
 		{"8626-1", "P-wave Axis", d.PFrontAxis, "deg", "deg"},
 		{"8632-9", "QRS Axis", d.QRSFrontAxis, "deg", "deg"},
 		{"8638-7", "T-wave Axis", d.TFrontAxis, "deg", "deg"},
+		{"8628-7", "ST Axis", d.STFrontAxis, "deg", "deg"},
 		{"8640-3", "QT Dispersion", d.QTDispersion, "ms", "ms"},
 	}
 
