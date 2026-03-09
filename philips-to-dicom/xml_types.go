@@ -113,7 +113,21 @@ type Interpretations struct {
 }
 
 type InterpretationItem struct {
-	Measurements InterpretationMeasurements `xml:"interpretationmeasurements"`
+	Measurements    InterpretationMeasurements `xml:"interpretationmeasurements"`
+	MdSignatureLine string                     `xml:"mdsignatureline"`
+	Severity        InterpretationSeverity     `xml:"severity"`
+	Statement       InterpretationStatement    `xml:"statement"`
+}
+
+type InterpretationSeverity struct {
+	Code string `xml:"code,attr"`
+	ID   string `xml:"id,attr"`
+	Text string `xml:",chardata"`
+}
+
+type InterpretationStatement struct {
+	LeftStatement  string `xml:"leftstatement"`
+	RightStatement string `xml:"rightstatement"`
 }
 
 type InterpretationMeasurements struct {
