@@ -3,7 +3,7 @@ module converter-fda
 go 1.25.1
 
 require (
-	github.com/LIRYC-IHU/hl7v3-aecg v0.0.0-20260226141144-4321baf4f7a8
+	github.com/LIRYC-IHU/hl7v3-aecg v0.0.0-20260303101355-2f589973c30b
 	github.com/spf13/cobra v1.10.2
 	github.com/suyashkumar/dicom v1.1.0
 )
