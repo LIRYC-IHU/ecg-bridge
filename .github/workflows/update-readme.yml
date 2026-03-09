@@ -1,0 +1,49 @@
+name: Update README CLI list
+
+on:
+  push:
+    branches:
+      - main
+permissions:
+  contents: write
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Generate CLI list
+        run: |
+          echo "## CLI Tools" > cli_list.md
+          echo "" >> cli_list.md
+
+          for dir in cmd/*; do
+            name=$(basename $dir)
+            echo "- \`$name\` " >> cli_list.md
+            echo "\`\`\`bash" >> cli_list.md
+            echo "go install https://github.com/LIRYC-IHU/ecg-bridge/cmd/$name@latest" >> cli_list.md
+            echo "\`\`\`" >> cli_list.md
+            echo "" >> cli_list.md
+          done
+      - name: Inject into README
+        run: |
+          awk '
+          /<!-- CLI_TOOLS_START -->/ {print; system("cat cli_list.md"); skip=1; next}
+          /<!-- CLI_TOOLS_END -->/ {skip=0}
+          !skip
+          ' README.md > README.tmp
+
+          mv README.tmp README.md
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+          git add README.md
+
+          if ! git diff --cached --quiet; then
+            git commit -m "auto: update CLI list"
+            git push
+          fi
