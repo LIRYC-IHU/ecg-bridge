@@ -244,4 +244,20 @@ func addAnnotations(h *hl7aecg.Hl7xml, d *philipstodicom.PhilipsData, studyDT st
 	if d.QTDispersion > 0 {
 		annSet.AddQTDispersion(d.QTDispersion)
 	}
+
+	// ECG interpretation block
+	hasInterp := d.InterpretationSummary != "" || d.InterpretationComment != "" || len(d.InterpretationStatements) > 0
+	if hasInterp {
+		interpIdx := annSet.AddTextAnnotation("MDC_ECG_INTERPRETATION", string(types.MDC_OID), "")
+		interpAnn := annSet.GetAnnotation(interpIdx)
+		for _, stmt := range d.InterpretationStatements {
+			interpAnn.AddNestedTextAnnotation("MDC_ECG_INTERPRETATION_STATEMENT", string(types.MDC_OID), stmt)
+		}
+		if d.InterpretationSummary != "" {
+			interpAnn.AddNestedTextAnnotation("MDC_ECG_INTERPRETATION_SUMMARY", string(types.MDC_OID), d.InterpretationSummary)
+		}
+		if d.InterpretationComment != "" {
+			interpAnn.AddNestedTextAnnotation("MDC_ECG_INTERPRETATION_COMMENT", string(types.MDC_OID), d.InterpretationComment)
+		}
+	}
 }
