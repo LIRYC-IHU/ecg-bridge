@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build all tools
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          VERSION=${GITHUB_REF_NAME}
+          LDFLAGS="-X main.version=${VERSION} -s -w"
+          TOOLS=$(ls cmd/)
+          STAGE=dist/${{ matrix.goos }}_${{ matrix.goarch }}
+          mkdir -p "$STAGE"
+
+          for tool in $TOOLS; do
+            EXT=""
+            [ "${{ matrix.goos }}" = "windows" ] && EXT=".exe"
+            go build -ldflags "$LDFLAGS" -o "$STAGE/${tool}${EXT}" ./cmd/${tool}
+          done
+
+      - name: Create archive
+        run: |
+          PLATFORM=${{ matrix.goos }}_${{ matrix.goarch }}
+          STAGE=dist/${PLATFORM}
+          VERSION=${GITHUB_REF_NAME}
+          ARCHIVE="ecg-bridge_${VERSION}_${PLATFORM}"
+
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            cd dist && zip -r "../${ARCHIVE}.zip" "${PLATFORM}/"
+          else
+            tar -czf "${ARCHIVE}.tar.gz" -C dist "${PLATFORM}/"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecg-bridge_${{ matrix.goos }}_${{ matrix.goarch }}
+          path: ecg-bridge_*.{tar.gz,zip}
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          sha256sum * > checksums.txt
+          cat checksums.txt
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/*.tar.gz
+            artifacts/*.zip
+            artifacts/checksums.txt
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
