@@ -22,7 +22,7 @@ jobs:
             name=$(basename $dir)
             echo "- \`$name\` " >> cli_list.md
             echo "\`\`\`bash" >> cli_list.md
-            echo "go install https://github.com/LIRYC-IHU/ecg-bridge/cmd/$name@latest" >> cli_list.md
+            echo "go install github.com/LIRYC-IHU/ecg-bridge/cmd/$name@latest" >> cli_list.md
             echo "\`\`\`" >> cli_list.md
             echo "" >> cli_list.md
           done
