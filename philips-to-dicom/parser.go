@@ -61,6 +61,11 @@ type PhilipsData struct {
 	TFrontAxis   float64 // degrees
 	STFrontAxis  float64 // degrees
 	QTDispersion float64 // ms
+
+	// ECG interpretation
+	InterpretationSummary    string   // severity text (e.g. "- ECG NORMAL -")
+	InterpretationComment    string   // mdsignatureline (e.g. "Unconfirmed Diagnosis")
+	InterpretationStatements []string // leftstatement / rightstatement (non-empty)
 }
 
 const philipsNamespace = "http://www3.medical.philips.com"
@@ -171,6 +176,17 @@ func ParsePhilips(path string) (*PhilipsData, error) {
 	// RR interval: taken from first groupmeasurement
 	if len(px.Measurements.GroupMeasures.Items) > 0 {
 		d.RRInterval = parseFloat(px.Measurements.GroupMeasures.Items[0].MeanRRInt)
+	}
+
+	// ECG interpretation
+	interp := px.Interpretations.Interpretation
+	d.InterpretationSummary = strings.TrimSpace(interp.Severity.Text)
+	d.InterpretationComment = strings.TrimSpace(interp.MdSignatureLine)
+	if left := strings.TrimSpace(interp.Statement.LeftStatement); left != "" {
+		d.InterpretationStatements = append(d.InterpretationStatements, left)
+	}
+	if right := strings.TrimSpace(interp.Statement.RightStatement); right != "" {
+		d.InterpretationStatements = append(d.InterpretationStatements, right)
 	}
 
 	return d, nil
