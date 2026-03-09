@@ -29,9 +29,8 @@ func decodeRhythmLeads(pw ParsedWaveforms) ([12][]int16, error) {
 		return [12][]int16{}, fmt.Errorf("base64 decode: %w", err)
 	}
 
-	// Detect XLI by magic byte (0x7F) — v1.04.x omits compressmethod attribute.
-	if len(decoded) == 0 || decoded[0] != 0x7F {
-		return [12][]int16{}, fmt.Errorf("only XLI compression is supported (expected magic 0x7F, got 0x%02X)", decoded[0])
+	if len(decoded) == 0 {
+		return [12][]int16{}, fmt.Errorf("empty waveform data")
 	}
 
 	var leads [12][]int16
