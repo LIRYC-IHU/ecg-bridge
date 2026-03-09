@@ -26,6 +26,9 @@ converter-fda/
 └── go.mod
 ```
 
+<!-- CLI_TOOLS_START -->
+<!-- CLI_TOOLS_END -->
+
 ## Dependencies
 
 - **[hl7v3-aecg](https://github.com/LIRYC-IHU/hl7v3-aecg)** — Go library for generating/parsing FDA-compliant HL7 v3 aECG XML files (12-lead ECG, annotations, clinical trial metadata)
