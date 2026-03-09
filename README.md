@@ -31,7 +31,7 @@ converter-fda/
 
 - `philips-to-dicom` 
 ```bash
-go install https://github.com/LIRYC-IHU/ecg-bridge/cmd/philips-to-dicom@latest
+go install github.com/LIRYC-IHU/ecg-bridge/cmd/philips-to-dicom@latest
 ```
 
 <!-- CLI_TOOLS_END -->
