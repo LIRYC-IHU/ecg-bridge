@@ -7,11 +7,29 @@ import (
 	"github.com/suyashkumar/dicom"
 )
 
+// Options holds optional conversion parameters.
+type Options struct {
+	// Anonymize removes all patient-identifying fields (name, ID, age, sex).
+	Anonymize bool
+}
+
 // Convert reads a Philips SierraECG XML file and writes a DICOM ECG file.
 func Convert(inputPath, outputPath string) error {
+	return ConvertWithOptions(inputPath, outputPath, Options{})
+}
+
+// ConvertWithOptions is like Convert but accepts additional options.
+func ConvertWithOptions(inputPath, outputPath string, opts Options) error {
 	data, err := ParsePhilips(inputPath)
 	if err != nil {
 		return fmt.Errorf("parsing Philips XML: %w", err)
+	}
+
+	if opts.Anonymize {
+		data.PatientID = ""
+		data.PatientName = ""
+		data.PatientAge = ""
+		data.PatientSex = ""
 	}
 
 	ds, err := BuildDICOM(data)
