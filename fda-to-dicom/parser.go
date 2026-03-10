@@ -16,6 +16,7 @@ type FDAData struct {
 	PatientName string
 	PatientSex  string // "M" / "F" / ""
 	PatientDOB  string // YYYYMMDD
+	PatientAge  string // DICOM AS format e.g. "050Y"
 
 	// Study
 	StudyDate string // YYYYMMDD
@@ -28,6 +29,7 @@ type FDAData struct {
 	SerialNumber    string
 	SoftwareVer     string
 	InstitutionName string
+	OperatorID      string
 
 	// Filters (Hz)
 	FilterLPF   float64
@@ -45,6 +47,14 @@ type FDAData struct {
 	QRSFrontAxis float64
 	TFrontAxis   float64
 	QTDispersion float64
+
+	// Waveforms: lead name → samples (raw ADC integers)
+	// Key: "I", "II", ..., "V6"  (from MDC_ECG_LEAD_* code)
+	SamplingRate float64            // Hz
+	Sensitivity  float64            // µV/LSB (from SLIST_PQ scale)
+	Baseline     float64            // origin
+	Leads        map[string][]int16 // ORIGINAL (rhythm)
+	RepBeats     map[string][]int16 // DERIVED (representative beat)
 }
 
 // ParseFDA reads an FDA aECG XML file and returns an FDAData.
@@ -69,6 +79,7 @@ func ParseFDA(path string) (*FDAData, error) {
 		if person.BirthTime != nil {
 			d.PatientDOB = hl7Date(person.BirthTime.Value)
 		}
+		d.PatientAge = strings.TrimSpace(person.Age)
 	}
 
 	// ── Study date/time ───────────────────────────────────────────────────────
@@ -79,13 +90,24 @@ func ParseFDA(path string) (*FDAData, error) {
 		d.StudyUID = hl7OIDtoUID(ecg.ID.Root)
 	}
 
+	// ── Institution name from clinical trial location ──────────────────────────
+	if ecg.ComponentOf != nil {
+		ct := &ecg.ComponentOf.TimepointEvent.ComponentOf.SubjectAssignment.ComponentOf.ClinicalTrial
+		if ct.Location != nil {
+			site := &ct.Location.TrialSite
+			if site.Location != nil && site.Location.Name != nil {
+				d.InstitutionName = strings.TrimSpace(*site.Location.Name)
+			}
+		}
+	}
+
 	// ── Series (first series) ─────────────────────────────────────────────────
 	series := firstSeries(ecg)
 	if series == nil {
 		return d, nil
 	}
 
-	// Device
+	// Device (from first series author)
 	if series.Author != nil {
 		sa := series.Author.SeriesAuthor
 		dev := sa.ManufacturedSeriesDevice
@@ -103,11 +125,73 @@ func ParseFDA(path string) (*FDAData, error) {
 		}
 	}
 
+	// Operator (from first secondary performer)
+	if len(series.SecondaryPerformer) > 0 {
+		sp := &series.SecondaryPerformer[0]
+		if sp.SeriesPerformer.AssignedPerson != nil && sp.SeriesPerformer.AssignedPerson.Name != nil {
+			d.OperatorID = strings.TrimSpace(*sp.SeriesPerformer.AssignedPerson.Name)
+		}
+	}
+
 	// Filters
 	d.FilterLPF, d.FilterHPF, d.NotchFilter = parseFilters(series.ControlVariable)
 
-	// Annotations / measurements
-	for _, so := range series.SubjectOf {
+	// Waveforms — iterate all top-level series
+	d.Leads = make(map[string][]int16)
+	d.RepBeats = make(map[string][]int16)
+	for si := range ecg.Component {
+		s := &ecg.Component[si].Series
+		// Rhythm waveforms from this series' direct components
+		for ci := range s.Component {
+			ss := &s.Component[ci].SequenceSet
+			sr, sens, base, leads := parseSequenceSet(ss)
+			if sr > 0 && d.SamplingRate == 0 {
+				d.SamplingRate = sr
+			}
+			if sens > 0 && d.Sensitivity == 0 {
+				d.Sensitivity = sens
+				d.Baseline = base
+			}
+			for k, v := range leads {
+				d.Leads[k] = v
+			}
+		}
+		// Representative beat waveforms from derivation
+		for di := range s.Derivation {
+			ds := &s.Derivation[di].DerivedSeries
+			for ci := range ds.Component {
+				ss := &ds.Component[ci].SequenceSet
+				sr, sens, base, leads := parseSequenceSet(ss)
+				if sr > 0 && d.SamplingRate == 0 {
+					d.SamplingRate = sr
+				}
+				if sens > 0 && d.Sensitivity == 0 {
+					d.Sensitivity = sens
+					d.Baseline = base
+				}
+				for k, v := range leads {
+					d.RepBeats[k] = v
+				}
+			}
+		}
+	}
+
+	// Annotations — from all series and their derived series
+	for si := range ecg.Component {
+		s := &ecg.Component[si].Series
+		extractSeriesAnnotations(d, s)
+		for di := range s.Derivation {
+			ds := &s.Derivation[di].DerivedSeries
+			extractSeriesAnnotations(d, ds)
+		}
+	}
+
+	return d, nil
+}
+
+// extractSeriesAnnotations reads measurement annotations from a series' SubjectOf list.
+func extractSeriesAnnotations(d *FDAData, s *types.Series) {
+	for _, so := range s.SubjectOf {
 		if so.AnnotationSet == nil {
 			continue
 		}
@@ -116,8 +200,105 @@ func ParseFDA(path string) (*FDAData, error) {
 			extractMeasurement(d, ann)
 		}
 	}
+}
 
-	return d, nil
+// parseSequenceSet extracts sampling rate, sensitivity, baseline and lead samples
+// from a SequenceSet. Returns samplingRate=0 if no time sequence found.
+func parseSequenceSet(ss *types.SequenceSet) (samplingRate, sensitivity, baseline float64, leads map[string][]int16) {
+	leads = make(map[string][]int16)
+	for ci := range ss.Component {
+		seq := &ss.Component[ci].Sequence
+		if seq.Code.Lead == nil {
+			// Time sequence — extract sampling rate from increment
+			if seq.Value != nil {
+				if gts, ok := seq.Value.Typed.(*types.GLIST_TS); ok {
+					if inc, err := strconv.ParseFloat(strings.TrimSpace(gts.Increment.Value), 64); err == nil && inc > 0 {
+						switch strings.TrimSpace(gts.Increment.Unit) {
+						case "ms":
+							samplingRate = 1000.0 / inc
+						default: // "s"
+							samplingRate = 1.0 / inc
+						}
+					}
+				} else if gts, ok := seq.Value.Typed.(*types.GLIST_PQ); ok {
+					if inc, err := strconv.ParseFloat(strings.TrimSpace(gts.Increment.Value), 64); err == nil && inc > 0 {
+						switch strings.TrimSpace(gts.Increment.Unit) {
+						case "ms":
+							samplingRate = 1000.0 / inc
+						default: // "s"
+							samplingRate = 1.0 / inc
+						}
+					}
+				}
+			}
+			continue
+		}
+		// Voltage sequence
+		leadName := leadCodeToName(seq.Code.Lead.Code)
+		if leadName == "" || seq.Value == nil {
+			continue
+		}
+		var digits []int
+		switch v := seq.Value.Typed.(type) {
+		case *types.SLIST_PQ:
+			var err error
+			digits, err = v.GetDigits()
+			if err != nil {
+				continue
+			}
+			if sensitivity == 0 {
+				sensitivity, _ = strconv.ParseFloat(strings.TrimSpace(v.Scale.Value), 64)
+				baseline, _ = strconv.ParseFloat(strings.TrimSpace(v.Origin.Value), 64)
+			}
+		case *types.SLIST_INT:
+			var err error
+			digits, err = v.GetDigits()
+			if err != nil {
+				continue
+			}
+		default:
+			continue
+		}
+		samples := make([]int16, len(digits))
+		for i, d := range digits {
+			samples[i] = int16(d)
+		}
+		leads[leadName] = samples
+	}
+	return
+}
+
+// leadCodeToName converts a MDC_ECG_LEAD_* code to a short name like "I", "V1".
+func leadCodeToName(code types.LeadCode) string {
+	s := string(code)
+	switch s {
+	case "MDC_ECG_LEAD_I":
+		return "I"
+	case "MDC_ECG_LEAD_II":
+		return "II"
+	case "MDC_ECG_LEAD_III":
+		return "III"
+	case "MDC_ECG_LEAD_AVR":
+		return "aVR"
+	case "MDC_ECG_LEAD_AVL":
+		return "aVL"
+	case "MDC_ECG_LEAD_AVF":
+		return "aVF"
+	case "MDC_ECG_LEAD_V1":
+		return "V1"
+	case "MDC_ECG_LEAD_V2":
+		return "V2"
+	case "MDC_ECG_LEAD_V3":
+		return "V3"
+	case "MDC_ECG_LEAD_V4":
+		return "V4"
+	case "MDC_ECG_LEAD_V5":
+		return "V5"
+	case "MDC_ECG_LEAD_V6":
+		return "V6"
+	default:
+		return ""
+	}
 }
 
 // subjectDemographicPerson navigates the hierarchy to reach the patient demographics.
