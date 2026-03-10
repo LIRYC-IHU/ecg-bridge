@@ -136,7 +136,22 @@ func buildWaveformItem(d *FDAData, originality, label string, leads map[string][
 		return nil, err
 	}
 
-	rawData := interleaveLeads(orderedLeads, numSamples)
+	// Normalize to 1 µV/LSB: multiply raw digits by sensitivity (+ baseline).
+	// This ensures DICOM raw int16 values directly represent µV regardless of
+	// the source file's original scale factor.
+	sensitivity := d.Sensitivity
+	if sensitivity == 0 {
+		sensitivity = 1
+	}
+	scaledLeads := make([][]int16, len(orderedLeads))
+	for i, lead := range orderedLeads {
+		scaledLeads[i] = make([]int16, len(lead))
+		for j, v := range lead {
+			scaledLeads[i][j] = int16(float64(v)*sensitivity + d.Baseline)
+		}
+	}
+
+	rawData := interleaveLeads(scaledLeads, numSamples)
 
 	item := []*dicom.Element{
 		mustElem(tag.WaveformOriginality, []string{originality}),
@@ -180,10 +195,10 @@ func buildChannelDef(leadName string, d *FDAData) ([]*dicom.Element, error) {
 
 	ch := []*dicom.Element{
 		srcSeq,
-		mustElem(tag.ChannelSensitivity, []string{fmtFloat(d.Sensitivity)}),
+		mustElem(tag.ChannelSensitivity, []string{"1"}),
 		unitSeq,
 		mustElem(tag.ChannelSensitivityCorrectionFactor, []string{"1"}),
-		mustElem(tag.ChannelBaseline, []string{fmtFloat(d.Baseline)}),
+		mustElem(tag.ChannelBaseline, []string{"0"}),
 		mustElem(tag.ChannelSampleSkew, []string{"0"}),
 		mustElem(tag.WaveformBitsStored, []int{16}),
 		// DICOM FilterLowFrequency = high-pass cutoff; FilterHighFrequency = low-pass cutoff
