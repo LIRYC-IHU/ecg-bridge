@@ -24,8 +24,17 @@ var testPatients = []string{
 	"BS1202", "BS1203", "BS1212", "BS1213", "BS1214", "BS1215",
 }
 
+// requireFDADir skips the test if the local FDA test data directory is not present.
+func requireFDADir(t *testing.T) {
+	t.Helper()
+	if _, err := os.Stat(testFDADir); os.IsNotExist(err) {
+		t.Skip("FDA test data not available (data_test/fda not present)")
+	}
+}
+
 // TestParseMetadata checks patient, study, and device fields for BS1170.
 func TestParseMetadata(t *testing.T) {
+	requireFDADir(t)
 	d, err := ParseFDA(filepath.Join(testFDADir, "BS1170.xml"))
 	if err != nil {
 		t.Fatalf("ParseFDA: %v", err)
@@ -85,6 +94,7 @@ func TestParseInstitutionAndSerial(t *testing.T) {
 
 // TestParseWaveforms checks sampling rate, sensitivity, and lead data for BS1170.
 func TestParseWaveforms(t *testing.T) {
+	requireFDADir(t)
 	d, err := ParseFDA(filepath.Join(testFDADir, "BS1170.xml"))
 	if err != nil {
 		t.Fatalf("ParseFDA: %v", err)
@@ -113,6 +123,7 @@ func TestParseWaveforms(t *testing.T) {
 
 // TestParseFilters checks filter values for BS1170.
 func TestParseFilters(t *testing.T) {
+	requireFDADir(t)
 	d, err := ParseFDA(filepath.Join(testFDADir, "BS1170.xml"))
 	if err != nil {
 		t.Fatalf("ParseFDA: %v", err)
@@ -131,6 +142,7 @@ func TestParseFilters(t *testing.T) {
 
 // TestAnnotations checks measurement values for BS1170.
 func TestAnnotations(t *testing.T) {
+	requireFDADir(t)
 	d, err := ParseFDA(filepath.Join(testFDADir, "BS1170.xml"))
 	if err != nil {
 		t.Fatalf("ParseFDA: %v", err)
@@ -155,6 +167,7 @@ func TestAnnotations(t *testing.T) {
 
 // TestParseRepBeats checks that representative beat waveforms are parsed from derivation.
 func TestParseRepBeats(t *testing.T) {
+	requireFDADir(t)
 	d, err := ParseFDA(filepath.Join(testFDADir, "BS1170.xml"))
 	if err != nil {
 		t.Fatalf("ParseFDA: %v", err)
@@ -203,6 +216,7 @@ func TestDICOMDeviceSerial(t *testing.T) {
 // TestDICOMAnnotationChannels checks that (0040,A0B0) ReferencedWaveformChannels is [1,0]
 // in every WaveformAnnotationSequence item.
 func TestDICOMAnnotationChannels(t *testing.T) {
+	requireFDADir(t)
 	output := filepath.Join(t.TempDir(), "bs1170.dcm")
 	if err := Convert(filepath.Join(testFDADir, "BS1170.xml"), output); err != nil {
 		t.Fatalf("Convert: %v", err)
@@ -244,6 +258,7 @@ func TestDICOMAnnotationChannels(t *testing.T) {
 
 // TestDICOMWaveformItems checks that the DICOM output contains ORIGINAL + DERIVED waveform items.
 func TestDICOMWaveformItems(t *testing.T) {
+	requireFDADir(t)
 	output := filepath.Join(t.TempDir(), "bs1170.dcm")
 	if err := Convert(filepath.Join(testFDADir, "BS1170.xml"), output); err != nil {
 		t.Fatalf("Convert: %v", err)
@@ -284,6 +299,7 @@ func TestDICOMWaveformItems(t *testing.T) {
 
 // TestConvertAll converts all 12 patients and checks the output file size.
 func TestConvertAll(t *testing.T) {
+	requireFDADir(t)
 	for _, patient := range testPatients {
 		patient := patient
 		t.Run(patient, func(t *testing.T) {
@@ -306,6 +322,7 @@ func TestConvertAll(t *testing.T) {
 // TestWaveformCorrelation compares waveforms from our DICOM against Philips reference.
 // Skipped when /Volumes/Signal is not mounted.
 func TestWaveformCorrelation(t *testing.T) {
+	requireFDADir(t)
 	if _, err := os.Stat(refDICOMBase); os.IsNotExist(err) {
 		t.Skip("reference DICOM volume not mounted")
 	}
