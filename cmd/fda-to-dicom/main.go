@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	philipstodicom "converter-fda/philips-to-dicom"
+	fdatodicom "converter-fda/fda-to-dicom"
 
 	"github.com/spf13/cobra"
 )
@@ -14,26 +14,24 @@ var (
 	inputPath  string
 	outputPath string
 	debugMode  bool
-	anonymize  bool
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "philips-to-dicom",
-	Short: "Convert Philips SierraECG XML files to DICOM ECG format",
-	Long: `philips-to-dicom converts Philips SierraECG XML files (v1.03/1.04)
+	Use:   "fda-to-dicom",
+	Short: "Convert FDA aECG XML files to DICOM ECG format",
+	Long: `fda-to-dicom converts FDA HL7 aECG XML files (AnnotatedECG)
 into DICOM 12-Lead ECG Waveform Storage (.dcm) format.
 
 Examples:
-  philips-to-dicom --input ecg.xml --output ecg.dcm
-  philips-to-dicom --input ecg.xml --output ecg.dcm --debug`,
+  fda-to-dicom --input ecg.xml --output ecg.dcm
+  fda-to-dicom --input ecg.xml --output ecg.dcm --debug`,
 	RunE: runConvert,
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&inputPath, "input", "i", "", "Path to Philips SierraECG XML file (required)")
+	rootCmd.Flags().StringVarP(&inputPath, "input", "i", "", "Path to FDA aECG XML file (required)")
 	rootCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output DICOM file (.dcm) (required)")
 	rootCmd.Flags().BoolVarP(&debugMode, "debug", "d", false, "Print parsed fields to stderr before converting")
-	rootCmd.Flags().BoolVarP(&anonymize, "anonymize", "a", false, "Remove patient-identifying fields (name, ID, age, sex)")
 
 	_ = rootCmd.MarkFlagRequired("input")
 	_ = rootCmd.MarkFlagRequired("output")
@@ -44,23 +42,26 @@ func runConvert(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("input file not found: %s", inputPath)
 	}
 	if !strings.HasSuffix(strings.ToLower(inputPath), ".xml") {
-		return fmt.Errorf("input must be a Philips SierraECG XML file (.xml), got: %s", inputPath)
+		return fmt.Errorf("input must be an FDA aECG XML file (.xml), got: %s", inputPath)
 	}
 	if !strings.HasSuffix(strings.ToLower(outputPath), ".dcm") {
 		return fmt.Errorf("output must be a DICOM file (.dcm), got: %s", outputPath)
+	}
+	if err := fdatodicom.ValidateFDAInput(inputPath); err != nil {
+		return err
 	}
 
 	fmt.Fprintf(os.Stderr, "Converting %s → %s\n", inputPath, outputPath)
 
 	if debugMode {
-		data, err := philipstodicom.ParsePhilips(inputPath)
+		data, err := fdatodicom.ParseFDA(inputPath)
 		if err != nil {
 			return fmt.Errorf("parsing: %w", err)
 		}
 		printDebug(data)
 	}
 
-	if err := philipstodicom.ConvertWithOptions(inputPath, outputPath, philipstodicom.Options{Anonymize: anonymize}); err != nil {
+	if err := fdatodicom.Convert(inputPath, outputPath); err != nil {
 		return fmt.Errorf("conversion failed: %w", err)
 	}
 
@@ -68,39 +69,42 @@ func runConvert(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func printDebug(d *philipstodicom.PhilipsData) {
-	fmt.Fprintln(os.Stderr, "=== Philips ECG DEBUG ===")
+func printDebug(d *fdatodicom.FDAData) {
+	fmt.Fprintln(os.Stderr, "=== FDA aECG DEBUG ===")
 	fmt.Fprintf(os.Stderr, "PatientID:    %s\n", d.PatientID)
 	fmt.Fprintf(os.Stderr, "PatientName:  %s\n", d.PatientName)
 	fmt.Fprintf(os.Stderr, "PatientSex:   %s\n", d.PatientSex)
+	fmt.Fprintf(os.Stderr, "PatientDOB:   %s\n", d.PatientDOB)
 	fmt.Fprintf(os.Stderr, "PatientAge:   %s\n", d.PatientAge)
 	fmt.Fprintf(os.Stderr, "StudyDate:    %s\n", d.StudyDate)
 	fmt.Fprintf(os.Stderr, "StudyTime:    %s\n", d.StudyTime)
 	fmt.Fprintf(os.Stderr, "StudyUID:     %s\n", d.StudyUID)
+	fmt.Fprintf(os.Stderr, "Institution:  %s\n", d.InstitutionName)
+	fmt.Fprintf(os.Stderr, "OperatorID:   %s\n", d.OperatorID)
 	fmt.Fprintf(os.Stderr, "Manufacturer: %s\n", d.Manufacturer)
 	fmt.Fprintf(os.Stderr, "ModelName:    %s\n", d.ModelName)
+	fmt.Fprintf(os.Stderr, "SerialNumber: %s\n", d.SerialNumber)
 	fmt.Fprintf(os.Stderr, "SoftwareVer:  %s\n", d.SoftwareVer)
-	fmt.Fprintf(os.Stderr, "Institution:  %s\n", d.InstitutionName)
-	fmt.Fprintf(os.Stderr, "SamplingRate: %.0f Hz\n", d.SamplingRate)
-	fmt.Fprintf(os.Stderr, "Sensitivity:  %.1f µV/LSB\n", d.Sensitivity)
-	fmt.Fprintf(os.Stderr, "FilterHPF:    %g Hz\n", d.FilterHPF)
 	fmt.Fprintf(os.Stderr, "FilterLPF:    %g Hz\n", d.FilterLPF)
+	fmt.Fprintf(os.Stderr, "FilterHPF:    %g Hz\n", d.FilterHPF)
 	fmt.Fprintf(os.Stderr, "NotchFilter:  %g Hz\n", d.NotchFilter)
-	fmt.Fprintf(os.Stderr, "RhythmLeads:  12 leads × %d samples\n", len(d.RhythmLeads[0]))
-	fmt.Fprintf(os.Stderr, "RepBeats:     %d leads\n", len(d.RepBeats))
 	fmt.Fprintf(os.Stderr, "HeartRate:    %.0f /min\n", d.HeartRate)
 	fmt.Fprintf(os.Stderr, "PRInterval:   %.0f ms\n", d.PRInterval)
-	fmt.Fprintf(os.Stderr, "RRInterval:   %.0f ms\n", d.RRInterval)
 	fmt.Fprintf(os.Stderr, "QRSDuration:  %.0f ms\n", d.QRSDuration)
 	fmt.Fprintf(os.Stderr, "QTInterval:   %.0f ms\n", d.QTInterval)
 	fmt.Fprintf(os.Stderr, "QTcInterval:  %.0f ms\n", d.QTcInterval)
-	fmt.Fprintf(os.Stderr, "AtrialRate:   %.0f /min\n", d.AtrialRate)
-	fmt.Fprintf(os.Stderr, "PFrontAxis:   %g°\n", d.PFrontAxis)
-	fmt.Fprintf(os.Stderr, "QRSFrontAxis: %g°\n", d.QRSFrontAxis)
-	fmt.Fprintf(os.Stderr, "TFrontAxis:   %g°\n", d.TFrontAxis)
-	fmt.Fprintf(os.Stderr, "STFrontAxis:  %g°\n", d.STFrontAxis)
-	fmt.Fprintf(os.Stderr, "QTDispersion: %.0f ms\n", d.QTDispersion)
-	fmt.Fprintln(os.Stderr, "=========================")
+	fmt.Fprintf(os.Stderr, "SamplingRate: %g Hz\n", d.SamplingRate)
+	fmt.Fprintf(os.Stderr, "Sensitivity:  %g uV/LSB\n", d.Sensitivity)
+	fmt.Fprintf(os.Stderr, "Baseline:     %g\n", d.Baseline)
+	fmt.Fprintf(os.Stderr, "Leads:        %d", len(d.Leads))
+	for _, name := range []string{"I", "II", "III", "aVR", "aVL", "aVF", "V1", "V2", "V3", "V4", "V5", "V6"} {
+		if s, ok := d.Leads[name]; ok {
+			fmt.Fprintf(os.Stderr, "  %s=%d", name, len(s))
+		}
+	}
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintf(os.Stderr, "RepBeats:     %d leads\n", len(d.RepBeats))
+	fmt.Fprintln(os.Stderr, "======================")
 }
 
 func main() {
