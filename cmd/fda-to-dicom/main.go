@@ -75,9 +75,12 @@ func printDebug(d *fdatodicom.FDAData) {
 	fmt.Fprintf(os.Stderr, "PatientName:  %s\n", d.PatientName)
 	fmt.Fprintf(os.Stderr, "PatientSex:   %s\n", d.PatientSex)
 	fmt.Fprintf(os.Stderr, "PatientDOB:   %s\n", d.PatientDOB)
+	fmt.Fprintf(os.Stderr, "PatientAge:   %s\n", d.PatientAge)
 	fmt.Fprintf(os.Stderr, "StudyDate:    %s\n", d.StudyDate)
 	fmt.Fprintf(os.Stderr, "StudyTime:    %s\n", d.StudyTime)
 	fmt.Fprintf(os.Stderr, "StudyUID:     %s\n", d.StudyUID)
+	fmt.Fprintf(os.Stderr, "Institution:  %s\n", d.InstitutionName)
+	fmt.Fprintf(os.Stderr, "OperatorID:   %s\n", d.OperatorID)
 	fmt.Fprintf(os.Stderr, "Manufacturer: %s\n", d.Manufacturer)
 	fmt.Fprintf(os.Stderr, "ModelName:    %s\n", d.ModelName)
 	fmt.Fprintf(os.Stderr, "SerialNumber: %s\n", d.SerialNumber)
@@ -90,6 +93,17 @@ func printDebug(d *fdatodicom.FDAData) {
 	fmt.Fprintf(os.Stderr, "QRSDuration:  %.0f ms\n", d.QRSDuration)
 	fmt.Fprintf(os.Stderr, "QTInterval:   %.0f ms\n", d.QTInterval)
 	fmt.Fprintf(os.Stderr, "QTcInterval:  %.0f ms\n", d.QTcInterval)
+	fmt.Fprintf(os.Stderr, "SamplingRate: %g Hz\n", d.SamplingRate)
+	fmt.Fprintf(os.Stderr, "Sensitivity:  %g uV/LSB\n", d.Sensitivity)
+	fmt.Fprintf(os.Stderr, "Baseline:     %g\n", d.Baseline)
+	fmt.Fprintf(os.Stderr, "Leads:        %d", len(d.Leads))
+	for _, name := range []string{"I", "II", "III", "aVR", "aVL", "aVF", "V1", "V2", "V3", "V4", "V5", "V6"} {
+		if s, ok := d.Leads[name]; ok {
+			fmt.Fprintf(os.Stderr, "  %s=%d", name, len(s))
+		}
+	}
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintf(os.Stderr, "RepBeats:     %d leads\n", len(d.RepBeats))
 	fmt.Fprintln(os.Stderr, "======================")
 }
 
