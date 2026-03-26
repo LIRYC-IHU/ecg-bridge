@@ -23,6 +23,7 @@ var rootCmd = &cobra.Command{
 into DICOM 12-Lead ECG Waveform Storage (.dcm) format.
 
 Examples:
+  philips-to-dicom --input ecg.xml
   philips-to-dicom --input ecg.xml --output ecg.dcm
   philips-to-dicom --input ecg.xml --output ecg.dcm --debug`,
 	RunE: runConvert,
@@ -30,11 +31,10 @@ Examples:
 
 func init() {
 	rootCmd.Flags().StringVarP(&inputPath, "input", "i", "", "Path to Philips SierraECG XML file (required)")
-	rootCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output DICOM file (.dcm) (required)")
+	rootCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output DICOM file (.dcm) (default: stdout)")
 	rootCmd.Flags().BoolVarP(&debugMode, "debug", "d", false, "Print parsed fields to stderr before converting")
 
 	_ = rootCmd.MarkFlagRequired("input")
-	_ = rootCmd.MarkFlagRequired("output")
 }
 
 func runConvert(cmd *cobra.Command, args []string) error {
@@ -44,7 +44,7 @@ func runConvert(cmd *cobra.Command, args []string) error {
 	if !strings.HasSuffix(strings.ToLower(inputPath), ".xml") {
 		return fmt.Errorf("input must be a Philips SierraECG XML file (.xml), got: %s", inputPath)
 	}
-	if !strings.HasSuffix(strings.ToLower(outputPath), ".dcm") {
+	if outputPath != "" && !strings.HasSuffix(strings.ToLower(outputPath), ".dcm") {
 		return fmt.Errorf("output must be a DICOM file (.dcm), got: %s", outputPath)
 	}
 
@@ -62,7 +62,10 @@ func runConvert(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("conversion failed: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Done. Output written to %s\n", outputPath)
+	if outputPath != "" {
+		fmt.Fprintf(os.Stderr, "Done. Output written to %s\n", outputPath)
+	}
+
 	return nil
 }
 
