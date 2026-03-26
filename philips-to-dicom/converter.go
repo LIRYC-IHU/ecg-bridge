@@ -19,9 +19,15 @@ func Convert(inputPath, outputPath string) error {
 		return fmt.Errorf("building DICOM: %w", err)
 	}
 
-	f, err := os.Create(outputPath)
-	if err != nil {
-		return fmt.Errorf("creating output file: %w", err)
+	var f *os.File
+	if outputPath == "" {
+		// Write to stdout
+		f = os.Stdout
+	} else {
+		f, err = os.Create(outputPath)
+		if err != nil {
+			return fmt.Errorf("creating output file: %w", err)
+		}
 	}
 	defer f.Close()
 
