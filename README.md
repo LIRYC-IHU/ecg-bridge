@@ -10,16 +10,20 @@ Each converter lives in its own directory and can be used independently.
 
 ## Converters
 
-| Converter           | Source format         | Target format         | Status  |
-| ------------------- | --------------------- | --------------------- | ------- |
-| `dicom-to-fda`      | DICOM (ECG waveforms) | FDA HL7 v3 aECG XML   | Planned |
-| `fda-to-dicom`      | FDA HL7 v3 aECG XML   | DICOM (ECG waveforms) | Planned |
-| `philipsXml-to-fda` | Philips ECG XML       | FDA HL7 v3 aECG XML   | Planned |
+| Converter           | Source format         | Target format         | Status |
+| ------------------- | --------------------- | --------------------- | ------ |
+| `nk-to-fda`         | NK .DAT (PEC format)  | FDA HL7 v3 aECG XML   | Done   |
+| `nk-to-dicom`       | NK .DAT (PEC format)  | DICOM (ECG waveforms) | Done   |
+| `dicom-to-fda`      | DICOM (ECG waveforms) | FDA HL7 v3 aECG XML   | Done   |
+| `fda-to-dicom`      | FDA HL7 v3 aECG XML   | DICOM (ECG waveforms) | Done   |
+| `philipsXml-to-fda` | Philips ECG XML       | FDA HL7 v3 aECG XML   | Done   |
 
 ## Project Structure
 
 ```
 converter-fda/
+├── nk-to-fda/          # NK .DAT (PEC) → FDA HL7 v3 aECG XML
+├── nk-to-dicom/        # NK .DAT (PEC) → DICOM ECG
 ├── dicom-to-fda/       # DICOM → FDA HL7 v3 aECG XML
 ├── fda-to-dicom/       # FDA HL7 v3 aECG XML → DICOM
 ├── philipsXml-to-fda/  # Philips XML → FDA HL7 v3 aECG XML
@@ -27,19 +31,23 @@ converter-fda/
 ```
 
 <!-- CLI_TOOLS_START -->
+
 ## CLI Tools
 
-- `fda-to-dicom` 
+- `fda-to-dicom`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/fda-to-dicom@latest
 ```
 
-- `philips-to-dicom` 
+- `philips-to-dicom`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/philips-to-dicom@latest
 ```
 
-- `philips-to-fda` 
+- `philips-to-fda`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/philips-to-fda@latest
 ```
