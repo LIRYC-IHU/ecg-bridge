@@ -91,7 +91,7 @@ func parsePatient(secs map[uint16]section) PatientData {
 		if len(d) >= 0x173 {
 			pd.FamilyName = readNullStr(d[0x00:0x20])
 			pd.GivenName = readNullStr(d[0x20:0x3E])
-			pd.PatientID = readSpaceStr(d[0x3E : 0x3E+10])
+			pd.PatientID = readSpaceStr(d[0x3E : 0x3E+9])
 			if len(d) >= 0x160 {
 				pd.Location = readNullStr(d[0x143:0x160])
 			}
@@ -109,14 +109,22 @@ func parsePatient(secs map[uint16]section) PatientData {
 }
 
 // extractDeviceModel extracts model from SYSTEM data (e.g. "01002350K" → "2350K").
+// NK models follow the pattern ddddK where d=digit. The binary often prefixes
+// this with a manufacturer/series code (e.g. "0100"), so we scan for ddddK and
+// return from that point.
 func extractDeviceModel(data []byte) string {
 	s := readNullStr(data)
 	s = strings.TrimSpace(s)
-	// strip leading zeros and non-model prefix, keep the model part
-	// "01002350K" → "2350K"
-	for i, c := range s {
-		if c >= '1' && c <= '9' {
-			return s[i:]
+	// Scan for pattern: 4 digits + 'K'
+	for i := 0; i+4 < len(s); i++ {
+		if s[i] >= '0' && s[i] <= '9' &&
+			s[i+1] >= '0' && s[i+1] <= '9' &&
+			s[i+2] >= '0' && s[i+2] <= '9' &&
+			s[i+3] >= '0' && s[i+3] <= '9' &&
+			i+4 < len(s) && s[i+4] == 'K' {
+			// Extract model (ddddK) and trim any trailing spaces/padding
+			end := i + 5 // position after 'K'
+			return strings.TrimSpace(s[i:end])
 		}
 	}
 	return s
