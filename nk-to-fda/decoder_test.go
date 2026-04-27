@@ -76,7 +76,9 @@ func TestDecodeLeads_vs_FDAGroundTruth(t *testing.T) {
 		t.Fatal("RECORD section not found")
 	}
 
-	decoded, err := DecodeLeads(recSec.data, nSamples)
+	// Pass data from section start to EOF so V6 bitstream can read past the nominal boundary
+	recData := dat[recSec.offset+14:] // 14 = pecHeaderSize
+	decoded, err := DecodeLeads(recData, nSamples)
 	if err != nil {
 		t.Fatalf("DecodeLeads: %v", err)
 	}
@@ -167,6 +169,82 @@ func TestParseFile_Metadata(t *testing.T) {
 	}
 	if nd.Measurement.QRSDuration != 94 {
 		t.Errorf("QRSDuration: got %d, want 94", nd.Measurement.QRSDuration)
+	}
+}
+
+func TestDeriveLeads_vs_FDAGroundTruth(t *testing.T) {
+	if _, err := os.Stat(testDATFile); os.IsNotExist(err) {
+		t.Skipf("test data not found: %s", testDATFile)
+	}
+	if _, err := os.Stat(testFDAFile); os.IsNotExist(err) {
+		t.Skipf("test data not found: %s", testFDAFile)
+	}
+
+	dat, err := os.ReadFile(testDATFile)
+	if err != nil {
+		t.Fatalf("reading .DAT: %v", err)
+	}
+	secs, err := parseSections(dat)
+	if err != nil {
+		t.Fatalf("parseSections: %v", err)
+	}
+	recSec, ok := secs[secRecord]
+	if !ok {
+		t.Fatal("RECORD section not found")
+	}
+
+	recData := dat[recSec.offset+14:]
+	decoded, err := DecodeLeads(recData, nSamples)
+	if err != nil {
+		t.Fatalf("DecodeLeads: %v", err)
+	}
+
+	// Derive 4 augmented leads
+	iii, avr, avl, avf := DeriveLeads(decoded["I"], decoded["II"])
+	derived := map[string][]int32{
+		"III": iii,
+		"aVR": avr,
+		"aVL": avl,
+		"aVF": avf,
+	}
+
+	gt, err := parseFDADigits(testFDAFile)
+	if err != nil {
+		t.Fatalf("parseFDADigits: %v", err)
+	}
+
+	for _, name := range []string{"III", "aVR", "aVL", "aVF"} {
+		ref, ok := gt[name]
+		if !ok {
+			t.Errorf("lead %s not found in FDA XML", name)
+			continue
+		}
+		got, ok := derived[name]
+		if !ok {
+			t.Errorf("lead %s not derived", name)
+			continue
+		}
+		if len(ref) != nSamples {
+			t.Errorf("lead %s: FDA XML has %d samples, expected %d", name, len(ref), nSamples)
+		}
+		if len(got) != nSamples {
+			t.Errorf("lead %s: derived %d samples, expected %d", name, len(got), nSamples)
+		}
+		n := min(len(ref), len(got))
+		var mismatches int
+		for i := 0; i < n; i++ {
+			if got[i] != ref[i] {
+				if mismatches < 5 {
+					t.Errorf("lead %s[%d]: got %d, want %d", name, i, got[i], ref[i])
+				}
+				mismatches++
+			}
+		}
+		if mismatches == 0 {
+			t.Logf("lead %s: %d/%d samples exact match", name, n, nSamples)
+		} else {
+			t.Errorf("lead %s: %d/%d samples mismatch", name, mismatches, n)
+		}
 	}
 }
 
