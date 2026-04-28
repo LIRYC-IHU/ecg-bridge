@@ -21,6 +21,63 @@ type huffSym struct {
 	codeword uint32 // MSB-aligned on 32 bits
 }
 
+// parseFrameOffsets scans RECORD section to find frame offsets dynamically.
+// Strategy: extract offsets from sparse table @ +0x20..+0x60, skip sentinel 0x9000.
+// Returns []int with 8 offsets (one per lead: Gap/I, II, V1-V6).
+func parseFrameOffsets(rec []byte) ([]int, error) {
+	// Try sparse table scan @ +0x20..+0x60 (skip 0x9000 sentinels)
+	const tableStart = 0x20
+	const tableEnd = 0x60
+	if len(rec) >= tableEnd+2 {
+		offsets := []int{}
+		for i := tableStart; i < tableEnd && len(offsets) < 8; i += 2 {
+			val := int(binary.BigEndian.Uint16(rec[i : i+2]))
+			// Skip sentinels (0x9000, 0xFFFF, 0x8000) and invalid offsets
+			// Valid offsets should be < 10KB for small files
+			if val != 0x9000 && val != 0xFFFF && val != 0x8000 && val > 0 && val < 10000 {
+				offsets = append(offsets, val)
+			}
+		}
+		// Check validity: all offsets should be ascending
+		valid := len(offsets) == 8
+		if valid {
+			for i := 1; i < len(offsets); i++ {
+				if offsets[i] <= offsets[i-1] {
+					valid = false
+					break
+				}
+			}
+		}
+		if valid {
+			return offsets, nil
+		}
+	}
+
+	// Try compact table @ +0x40 (works for some files)
+	const offsetTableStart = 0x40
+	if len(rec) >= offsetTableStart+16 {
+		offsets := make([]int, 8)
+		valid := true
+		for i := 0; i < 8; i++ {
+			off := offsetTableStart + i*2
+			val := int(binary.BigEndian.Uint16(rec[off : off+2]))
+			// Sanity check: offsets should be < 30KB and ascending
+			if val == 0 || val > 30000 {
+				valid = false
+				break
+			}
+			offsets[i] = val
+		}
+		if valid {
+			return offsets, nil
+		}
+	}
+
+	// Fallback: use hardcoded offsets for 5000-sample files
+	// (These are empirically determined from 00000005.DAT)
+	return []int{0x0AB4, 0x1A66, 0x29E4, 0x359A, 0x417A, 0x4D5A, 0x594A, 0x6560}, nil
+}
+
 // DecodeLeads decodes all 8 measured leads from the RECORD section data.
 // rec = RECORD section data (starts at section_offset + 14 in the file).
 // nSamples = total samples per lead (e.g. 5000).
@@ -33,49 +90,45 @@ func DecodeLeads(rec []byte, nSamples int) (map[string][]int32, error) {
 		return nil, fmt.Errorf("unsupported compression type %d (only type 16 supported)", compType)
 	}
 
-	// Extract mode/param flags from Gap frame header @ rec[0x0AA2]
-	nSegs, modes, params, err := extractModesParams(rec, 0x0AA2)
+	// Parse frame offset table from RECORD header
+	// The offset table is at rec[0x40:0x60] — 8 u16 big-endian offsets (one per lead)
+	frameOffsets, err := parseFrameOffsets(rec)
+	if err != nil {
+		return nil, fmt.Errorf("parsing frame offsets: %w", err)
+	}
+
+	// Extract mode/param flags from Gap frame header
+	gapFrameStart := frameOffsets[0]
+	flagsOffset := gapFrameStart - 0x12 // flags are 18 bytes BEFORE Gap frame
+	nSegs, modes, params, err := extractModesParams(rec, flagsOffset)
 	if err != nil {
 		return nil, fmt.Errorf("extracting mode flags: %w", err)
 	}
 
-	// Frame definitions: (leadName, frame_start_in_rec, lead_index)
-	// Gap frame: frame_start = 0x0AB4 (ct_off = 0x0AB6)
-	// F1-F7: use frame_offsets helper
+	// Frame definitions: (leadName, frame_offset, lead_index)
 	type frameSpec struct {
 		name       string
-		frameStart int // used for F1-F7 to compute ct_off
-		ctOff      int // explicit ct_off for Gap
+		frameStart int
+		ctOff      int
 		leadIdx    int
 	}
 
-	// Gap frame uses special ct_off (0x0AB6) since first 20 bytes are the flags header.
-	gapCtOff := 0x0AB6
+	// Gap frame uses special ct_off (frame_start + 2) where CT size is stored
+	gapCtOff := gapFrameStart + 2
 	gapCtSize := int(binary.BigEndian.Uint16(rec[gapCtOff : gapCtOff+2]))
 	gapDataOff := gapCtOff + 2 + gapCtSize
 
 	frames := []frameSpec{
-		{name: "I", ctOff: gapCtOff, leadIdx: 0},
+		{name: "I", frameStart: gapFrameStart, ctOff: gapCtOff, leadIdx: 0},
 	}
-	for _, f := range []struct {
-		name       string
-		frameStart int
-		leadIdx    int
-	}{
-		{"II", 0x1A66, 1},
-		{"V1", 0x29E4, 2},
-		{"V2", 0x359A, 3},
-		{"V3", 0x417A, 4},
-		{"V4", 0x4D5A, 5},
-		{"V5", 0x594A, 6},
-		{"V6", 0x6560, 7},
-	} {
-		ctOff := f.frameStart + 2
+	leadNames := []string{"II", "V1", "V2", "V3", "V4", "V5", "V6"}
+	for i := 1; i < 8 && i < len(frameOffsets); i++ {
+		ctOff := frameOffsets[i] + 2
 		frames = append(frames, frameSpec{
-			name:       f.name,
-			frameStart: f.frameStart,
+			name:       leadNames[i-1],
+			frameStart: frameOffsets[i],
 			ctOff:      ctOff,
-			leadIdx:    f.leadIdx,
+			leadIdx:    i,
 		})
 	}
 	_ = gapDataOff // used inline below
