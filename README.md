@@ -38,6 +38,16 @@ converter-fda/
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/fda-to-dicom@latest
 ```
 
+- `mindray-to-dicom` 
+```bash
+go install github.com/LIRYC-IHU/ecg-bridge/cmd/mindray-to-dicom@latest
+```
+
+- `mindray-to-fda` 
+```bash
+go install github.com/LIRYC-IHU/ecg-bridge/cmd/mindray-to-fda@latest
+```
+
 - `nk-to-fda` 
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/nk-to-fda@latest
