@@ -17,6 +17,8 @@ Each converter lives in its own directory and can be used independently.
 | `dicom-to-fda`      | DICOM (ECG waveforms) | FDA HL7 v3 aECG XML   | Done   |
 | `fda-to-dicom`      | FDA HL7 v3 aECG XML   | DICOM (ECG waveforms) | Done   |
 | `philipsXml-to-fda` | Philips ECG XML       | FDA HL7 v3 aECG XML   | Done   |
+| `mindray-to-fda`    | BeneHeart R12 .PAT    | FDA HL7 v3 aECG XML   | Done   |
+| `mindray-to-dicom`  | BeneHeart R12 .PAT    | DICOM (ECG waveforms) | Done   |
 
 ## Project Structure
 
@@ -27,28 +29,35 @@ converter-fda/
 ├── dicom-to-fda/       # DICOM → FDA HL7 v3 aECG XML
 ├── fda-to-dicom/       # FDA HL7 v3 aECG XML → DICOM
 ├── philipsXml-to-fda/  # Philips XML → FDA HL7 v3 aECG XML
+├── mindray-to-fda/  # Mindray .PAT → FDA HL7 v3 aECG XML
+├── mindray-to-dicom/  # Mindray .PAT → DICOM ECG
 └── go.mod
 ```
 
 <!-- CLI_TOOLS_START -->
+
 ## CLI Tools
 
-- `fda-to-dicom` 
+- `fda-to-dicom`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/fda-to-dicom@latest
 ```
 
-- `nk-to-fda` 
+- `nk-to-fda`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/nk-to-fda@latest
 ```
 
-- `philips-to-dicom` 
+- `philips-to-dicom`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/philips-to-dicom@latest
 ```
 
-- `philips-to-fda` 
+- `philips-to-fda`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/philips-to-fda@latest
 ```
@@ -66,16 +75,6 @@ go get github.com/LIRYC-IHU/hl7v3-aecg
 ## Requirements
 
 - Go 1.20+
-
-## Branch Strategy
-
-Each converter is developed on its own branch:
-
-```
-dicom-to-fda    # DICOM → FDA converter
-fda-to-dicom    # FDA → DICOM converter
-philipsXml-to-fda # Philips XML → FDA converter
-```
 
 ## References
 
