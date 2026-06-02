@@ -27,10 +27,9 @@ Examples:
 
 func init() {
 	rootCmd.Flags().StringVarP(&inputPath, "input", "i", "", "Path to input Mindray file (required)")
-	rootCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output DICOM file (required)")
+	rootCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output DICOM file (optional, defaults to stdout)")
 
 	_ = rootCmd.MarkFlagRequired("input")
-	_ = rootCmd.MarkFlagRequired("output")
 }
 
 func runConvert(cmd *cobra.Command, args []string) error {
