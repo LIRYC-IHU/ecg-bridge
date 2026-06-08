@@ -93,6 +93,24 @@ func deriveFrameLayout(rec []byte, totalSamples int) (*frameLayout, error) {
 }
 
 // DecodeLeads decodes all 8 measured leads from the RECORD section data.
+// DecodeWaveforms decodes the 8 measured leads from a full NK .DAT file.
+// It derives the median-beat templates (needed to reconstruct QRS zones) from
+// the whole file, then decodes the RECORD section. nSamples is samples per lead.
+func DecodeWaveforms(dat []byte, nSamples int) (map[string][]int32, error) {
+	secs, err := parseSections(dat)
+	if err != nil {
+		return nil, err
+	}
+	recSec, ok := secs[secRecord]
+	if !ok {
+		return nil, fmt.Errorf("RECORD section (0x0008) not found")
+	}
+	// Pass data from the section start to end-of-file so the last frame's
+	// bitstream can spill one byte past the nominal section boundary.
+	recData := dat[recSec.offset+pecHeaderSize:]
+	return DecodeLeads(recData, nSamples, buildAvgTemplates(dat))
+}
+
 // rec = RECORD section data (starts at section_offset + 14 in the file).
 // nSamples = total samples per lead (e.g. 5000).
 // avg holds the median-beat templates used to reconstruct QRS zones (segment
