@@ -37,7 +37,11 @@ func Convert(inputPath, outputPath string) error {
 	// spill one byte past the nominal section boundary (last frame of V6) can
 	// still be read without a bounds panic or premature zero-fill.
 	recData := dat[recSec.offset+pecHeaderSize:]
-	leads, err := DecodeLeads(recData, nd.Record.TotalSamples)
+	// The median-beat templates (for QRS-zone reconstruction) are located by
+	// scanning the whole file, so they are derived here rather than inside the
+	// RECORD-only decoder.
+	avg := buildAvgTemplates(dat)
+	leads, err := DecodeLeads(recData, nd.Record.TotalSamples, avg)
 	if err != nil {
 		return fmt.Errorf("decoding waveforms: %w", err)
 	}
