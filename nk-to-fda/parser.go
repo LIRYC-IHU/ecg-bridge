@@ -194,15 +194,33 @@ func parseMeasurement(secs map[uint16]section) MeasurementData {
 }
 
 // parseRecord extracts waveform parameters from RECORD section.
+//
+// SampleRate comes from the RECORD header (+0x00, stable across files).
+//
+// TotalSamples is read from the 12LEAD section (0x0100) at +0x4E, which is at a
+// fixed offset in every observed file. The RECORD section's own total_samples
+// field (+0x1C4) is NOT reliable: it sits after a variable-length beat table,
+// so its offset shifts per recording (observed 0x60, 0x64, 0x1C4) and reading a
+// fixed +0x1C4 yields garbage (e.g. 62157, 2032) on files with a different beat
+// count, which then corrupts the whole waveform decode.
 func parseRecord(secs map[uint16]section) RecordParams {
 	rp := RecordParams{Scale: 1.25}
 	s, ok := secs[secRecord]
-	if !ok || len(s.data) < 0x1C6 {
+	if !ok || len(s.data) < 0x02 {
 		return rp
 	}
-	d := s.data
-	rp.SampleRate = readU16BE(d, 0x00)
-	rp.TotalSamples = readU16BE(d, 0x1C4)
+	rp.SampleRate = readU16BE(s.data, 0x00)
+
+	// Preferred: num_samples from the 12LEAD section (fixed +0x4E offset).
+	if l12, ok := secs[sec12Lead]; ok && len(l12.data) >= 0x50 {
+		if n := readU16BE(l12.data, 0x4E); n > 0 {
+			rp.TotalSamples = n
+		}
+	}
+	// Fallback: RECORD +0x1C4 (only correct for files whose beat table ends there).
+	if rp.TotalSamples == 0 && len(s.data) >= 0x1C6 {
+		rp.TotalSamples = readU16BE(s.data, 0x1C4)
+	}
 	return rp
 }
 
