@@ -1,6 +1,7 @@
 package nktofda
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 )
@@ -21,67 +22,82 @@ type huffSym struct {
 	codeword uint32 // MSB-aligned on 32 bits
 }
 
-// parseFrameOffsets scans RECORD section to find frame offsets dynamically.
-// Strategy: extract offsets from sparse table @ +0x20..+0x60, skip sentinel 0x9000.
-// Returns []int with 8 offsets (one per lead: Gap/I, II, V1-V6).
-func parseFrameOffsets(rec []byte) ([]int, error) {
-	// Try sparse table scan @ +0x20..+0x60 (skip 0x9000 sentinels)
-	const tableStart = 0x20
-	const tableEnd = 0x60
-	if len(rec) >= tableEnd+2 {
-		offsets := []int{}
-		for i := tableStart; i < tableEnd && len(offsets) < 8; i += 2 {
-			val := int(binary.BigEndian.Uint16(rec[i : i+2]))
-			// Skip sentinels (0x9000, 0xFFFF, 0x8000) and invalid offsets
-			// Valid offsets should be < 10KB for small files
-			if val != 0x9000 && val != 0xFFFF && val != 0x8000 && val > 0 && val < 10000 {
-				offsets = append(offsets, val)
-			}
-		}
-		// Check validity: all offsets should be ascending
-		valid := len(offsets) == 8
-		if valid {
-			for i := 1; i < len(offsets); i++ {
-				if offsets[i] <= offsets[i-1] {
-					valid = false
-					break
-				}
-			}
-		}
-		if valid {
-			return offsets, nil
-		}
+// frameLayout holds the per-lead frame layout derived from the RECORD section's
+// frame descriptor. All offsets are relative to the RECORD section data start.
+type frameLayout struct {
+	flags    int   // gap-frame flag header (mode/param bits) start
+	gapCtOff int   // code-table offset of the Gap frame (Lead I)
+	frames   []int // frame_start offsets for leads II, V1..V6 (7 entries)
+	nSeg     int
+	modes    []int
+	params   []int
+}
+
+// deriveFrameLayout locates the rhythm frames generically.
+//
+// Earlier code scanned a fixed byte range for an "offset table" and fell back to
+// constants from 00000005.DAT. That table does not exist: those constants are
+// specific to one recording, and the scan instead matched the beat/R-peak table
+// (small ascending values), producing garbage frame offsets and all-zero leads.
+//
+// The robust scheme uses the frame descriptor (flag 0xFF00 immediately followed
+// by total_samples) which every recording carries:
+//
+//	descriptor+0x00  0xFF00
+//	descriptor+0x02  total_samples
+//	descriptor+0x04  u16 -> (descriptor+4)+that = gap flag header ("flags")
+//	flags+0x00       u16 frame size: frameII = flags + this
+//	flags+0x02       u16 bit_count; n_segments = bit_count>>2
+//	flags+0x04..     packed mode/param bytes, ceil(n_seg/2) padded to even
+//	<after flags hdr> Gap frame code table (Lead I)
+//
+// Leads II..V6 are a linked list: each frame_start holds, at +0x00, the byte size
+// of that frame, so the next frame begins at frame_start + u16(frame_start).
+func deriveFrameLayout(rec []byte, totalSamples int) (*frameLayout, error) {
+	sig := []byte{0xFF, 0x00, byte(totalSamples >> 8), byte(totalSamples)}
+	d := bytes.Index(rec, sig)
+	if d < 0 {
+		return nil, fmt.Errorf("frame descriptor (0xFF00 + total_samples=%d) not found", totalSamples)
+	}
+	if d+6 > len(rec) {
+		return nil, fmt.Errorf("frame descriptor truncated")
+	}
+	flags := d + 4 + int(binary.BigEndian.Uint16(rec[d+4:d+6]))
+	if flags+4 > len(rec) {
+		return nil, fmt.Errorf("flag header out of bounds")
+	}
+	nSeg, modes, params, err := extractModesParams(rec, flags)
+	if err != nil {
+		return nil, err
 	}
 
-	// Try compact table @ +0x40 (works for some files)
-	const offsetTableStart = 0x40
-	if len(rec) >= offsetTableStart+16 {
-		offsets := make([]int, 8)
-		valid := true
-		for i := 0; i < 8; i++ {
-			off := offsetTableStart + i*2
-			val := int(binary.BigEndian.Uint16(rec[off : off+2]))
-			// Sanity check: offsets should be < 30KB and ascending
-			if val == 0 || val > 30000 {
-				valid = false
-				break
-			}
-			offsets[i] = val
+	// Gap (Lead I) code table follows the variable-length flag header.
+	flagBytes := (nSeg + 1) / 2
+	if flagBytes&1 != 0 {
+		flagBytes++ // pad to a 16-bit word boundary
+	}
+	gapCtOff := flags + 4 + flagBytes
+
+	// Leads II..V6: chained via the per-frame size word at frame_start+0x00.
+	frames := make([]int, 0, 7)
+	fs := flags + int(binary.BigEndian.Uint16(rec[flags:flags+2])) // frame II
+	for i := 0; i < 7; i++ {
+		if fs+2 > len(rec) {
+			return nil, fmt.Errorf("frame %d start 0x%x out of bounds", i+1, fs)
 		}
-		if valid {
-			return offsets, nil
-		}
+		frames = append(frames, fs)
+		fs += int(binary.BigEndian.Uint16(rec[fs : fs+2]))
 	}
 
-	// Fallback: use hardcoded offsets for 5000-sample files
-	// (These are empirically determined from 00000005.DAT)
-	return []int{0x0AB4, 0x1A66, 0x29E4, 0x359A, 0x417A, 0x4D5A, 0x594A, 0x6560}, nil
+	return &frameLayout{flags: flags, gapCtOff: gapCtOff, frames: frames, nSeg: nSeg, modes: modes, params: params}, nil
 }
 
 // DecodeLeads decodes all 8 measured leads from the RECORD section data.
 // rec = RECORD section data (starts at section_offset + 14 in the file).
 // nSamples = total samples per lead (e.g. 5000).
-func DecodeLeads(rec []byte, nSamples int) (map[string][]int32, error) {
+// avg holds the median-beat templates used to reconstruct QRS zones (segment
+// modes 2/3); it may be nil for recordings that use only modes 0/1.
+func DecodeLeads(rec []byte, nSamples int, avg *avgTemplates) (map[string][]int32, error) {
 	if len(rec) < 4 {
 		return nil, fmt.Errorf("RECORD data too short")
 	}
@@ -90,59 +106,33 @@ func DecodeLeads(rec []byte, nSamples int) (map[string][]int32, error) {
 		return nil, fmt.Errorf("unsupported compression type %d (only type 16 supported)", compType)
 	}
 
-	// Parse frame offset table from RECORD header
-	// The offset table is at rec[0x40:0x60] — 8 u16 big-endian offsets (one per lead)
-	frameOffsets, err := parseFrameOffsets(rec)
+	// Locate the frames generically from the frame descriptor.
+	layout, err := deriveFrameLayout(rec, nSamples)
 	if err != nil {
-		return nil, fmt.Errorf("parsing frame offsets: %w", err)
+		return nil, fmt.Errorf("deriving frame layout: %w", err)
 	}
 
-	// Extract mode/param flags from Gap frame header
-	gapFrameStart := frameOffsets[0]
-	flagsOffset := gapFrameStart - 0x12 // flags are 18 bytes BEFORE Gap frame
-	nSegs, modes, params, err := extractModesParams(rec, flagsOffset)
-	if err != nil {
-		return nil, fmt.Errorf("extracting mode flags: %w", err)
-	}
-
-	// Frame definitions: (leadName, frame_offset, lead_index)
+	// Frame definitions: (leadName, ct_off, lead_index). Lead I (Gap) uses the
+	// code-table offset after the flag header; leads II..V6 use frame_start+2.
 	type frameSpec struct {
-		name       string
-		frameStart int
-		ctOff      int
-		leadIdx    int
+		name    string
+		ctOff   int
+		leadIdx int
 	}
-
-	// Gap frame uses special ct_off (frame_start + 2) where CT size is stored
-	gapCtOff := gapFrameStart + 2
-	gapCtSize := int(binary.BigEndian.Uint16(rec[gapCtOff : gapCtOff+2]))
-	gapDataOff := gapCtOff + 2 + gapCtSize
-
-	frames := []frameSpec{
-		{name: "I", frameStart: gapFrameStart, ctOff: gapCtOff, leadIdx: 0},
-	}
+	frames := []frameSpec{{name: "I", ctOff: layout.gapCtOff, leadIdx: 0}}
 	leadNames := []string{"II", "V1", "V2", "V3", "V4", "V5", "V6"}
-	for i := 1; i < 8 && i < len(frameOffsets); i++ {
-		ctOff := frameOffsets[i] + 2
-		frames = append(frames, frameSpec{
-			name:       leadNames[i-1],
-			frameStart: frameOffsets[i],
-			ctOff:      ctOff,
-			leadIdx:    i,
-		})
+	for i, fs := range layout.frames {
+		frames = append(frames, frameSpec{name: leadNames[i], ctOff: fs + 2, leadIdx: i + 1})
 	}
-	_ = gapDataOff // used inline below
 
 	result := make(map[string][]int32, 8)
 	for _, fr := range frames {
-		var dataOff int
-		if fr.name == "I" {
-			dataOff = gapDataOff
-		} else {
-			ctSize := int(binary.BigEndian.Uint16(rec[fr.ctOff : fr.ctOff+2]))
-			dataOff = fr.ctOff + 2 + ctSize
+		if fr.ctOff+2 > len(rec) {
+			return nil, fmt.Errorf("lead %s code table out of bounds", fr.name)
 		}
-		samples, err := decodeLeadFrame(rec, fr.ctOff, dataOff, nSegs, modes, params, fr.leadIdx, nSamples)
+		ctSize := int(binary.BigEndian.Uint16(rec[fr.ctOff : fr.ctOff+2]))
+		dataOff := fr.ctOff + 2 + ctSize
+		samples, err := decodeLeadFrame(rec, fr.ctOff, dataOff, layout.nSeg, layout.modes, layout.params, fr.leadIdx, nSamples, avg)
 		if err != nil {
 			return nil, fmt.Errorf("decoding lead %s: %w", fr.name, err)
 		}
@@ -151,19 +141,27 @@ func DecodeLeads(rec []byte, nSamples int) (map[string][]int32, error) {
 	return result, nil
 }
 
-// extractModesParams extracts n_segments, modes[], params[] from the Gap frame header.
+// extractModesParams extracts n_segments, modes[], params[] from the Gap frame
+// flag header. The mode/param bits are packed into u16 words starting at
+// flags+4; the number of words depends on n_segments, so we read as many as the
+// last segment indexes (the original fixed 7-word read truncated files with
+// n_segments > ~28, e.g. n_segments=33).
 func extractModesParams(rec []byte, sectionStart int) (int, []int, []int, error) {
-	if sectionStart+18 > len(rec) {
+	if sectionStart+4 > len(rec) {
 		return 0, nil, nil, fmt.Errorf("Gap frame header out of bounds")
 	}
 	bitCount := int(binary.BigEndian.Uint16(rec[sectionStart+2 : sectionStart+4]))
 	nSegments := bitCount >> 2
+	if nSegments <= 0 || nSegments > 1024 {
+		return 0, nil, nil, fmt.Errorf("implausible n_segments %d", nSegments)
+	}
 
-	au898 := [13]int{0, 0}
-	for i := 2; i <= 8; i++ {
+	maxWordIdx := ((nSegments - 1) >> 2) + 2 // word index touched by the last segment
+	au := make([]int, maxWordIdx+5)          // +slack so clamping below is a no-op
+	for i := 2; i <= maxWordIdx; i++ {
 		off := sectionStart + i*2
 		if off+2 <= len(rec) {
-			au898[i] = int(binary.BigEndian.Uint16(rec[off : off+2]))
+			au[i] = int(binary.BigEndian.Uint16(rec[off : off+2]))
 		}
 	}
 
@@ -172,10 +170,10 @@ func extractModesParams(rec []byte, sectionStart int) (int, []int, []int, error)
 	for i := 0; i < nSegments; i++ {
 		uVar8 := i * 4
 		wordIdx := (uVar8 >> 4) + 2
-		if wordIdx >= len(au898) {
-			wordIdx = len(au898) - 1
+		if wordIdx >= len(au) {
+			wordIdx = len(au) - 1
 		}
-		uVar14 := au898[wordIdx]
+		uVar14 := au[wordIdx]
 		cVar3 := (-(uVar8 & 0xf)) & 0xff
 		shiftMode := (cVar3 + 14) & 0x1f
 		shiftParam := (cVar3 + 12) & 0x1f
@@ -304,7 +302,7 @@ func decodeSubunit(rec []byte, byteOffset int, syms [33]huffSym, maxSamp int) ([
 }
 
 // decodeLeadFrame decodes one lead from its frame.
-func decodeLeadFrame(rec []byte, ctOff, dataStart, nSegments int, modes, params []int, leadIdx, nSamples int) ([]int32, error) {
+func decodeLeadFrame(rec []byte, ctOff, dataStart, nSegments int, modes, params []int, leadIdx, nSamples int, avg *avgTemplates) ([]int32, error) {
 	syms, err := parseCodeTable(rec, ctOff)
 	if err != nil {
 		return nil, err
@@ -358,11 +356,20 @@ func decodeLeadFrame(rec []byte, ctOff, dataStart, nSegments int, modes, params 
 		bufOffset += nChunk
 
 		var newPos int
-		switch mode {
-		case 0:
+		switch {
+		case mode == 0:
 			newPos = mode0Write(output, nSamples, segVals, nChunk, leadIdx, outPos)
-		case 1:
+		case mode == 1:
 			newPos = mode1Upsample(output, nSamples, segVals, nChunk, leadIdx, outPos, param)
+		case mode >= 2 && avg != nil && leadIdx < len(avg.tpl) && avg.tpl[leadIdx] != nil:
+			// QRS subtraction zone: re-add the median beat. Mode 2 begins the
+			// reconstruction at the pre-QRS offset, mode 3 at the zone midpoint.
+			subOff := avg.subOffset
+			if mode == 3 {
+				subOff = avg.zoneMid
+			}
+			newPos = mode23QRSZone(output, nSamples, segVals, nChunk, avg.tpl[leadIdx],
+				leadIdx, outPos, avg.zoneMid, avg.zoneEnd, param, subOff)
 		default:
 			newPos = mode0Write(output, nSamples, segVals, nChunk, leadIdx, outPos)
 		}
@@ -475,4 +482,113 @@ func mode1Upsample(output []int32, maxEnd int, seg []int, count, lead, pos, para
 	}
 
 	return uVar5 + 4
+}
+
+// mode23QRSZone reconstructs a segment that spans a QRS subtraction zone.
+//
+// The compressed stream only carries the inter-beat residual around each QRS;
+// the median beat (avg) is re-added here. The zone has three boundaries on the
+// median template: subOffset (where the pre-QRS reconstruction starts), zoneMid
+// (the QRS midpoint) and zoneEnd. Reconstruction proceeds in three parts:
+//
+//  1. Pre-zone: add the median at stride 2 up to zoneMid, then 2× upsample.
+//  2. QRS core (zoneMid..zoneEnd): write residual+median directly to the output.
+//  3. Post-zone: add the median at stride 2 for the remainder, then 2× upsample.
+//
+// Returns the new output position, or -1 on overflow.
+func mode23QRSZone(output []int32, maxEnd int, segment []int, count int, avg []int32,
+	lead, pos, zoneMid, zoneEnd, param, subOffset int) int {
+
+	seg := make([]int, count)
+	copy(seg, segment)
+
+	avgAt := func(i int) int {
+		if i >= 0 && i < len(avg) {
+			return int(avg[i])
+		}
+		return 0
+	}
+	writeOut := func(t, val int) {
+		idx := t*8 + lead
+		if idx >= 0 && idx < len(output) {
+			output[idx] = s16trunc(val)
+		}
+	}
+
+	uVar9 := 0
+
+	// Part 1: pre-zone median addition (stride 2) then 2× upsample.
+	if subOffset < zoneMid {
+		cVar2 := (zoneMid - subOffset) & 0xFF
+		idx := subOffset
+		for idx < zoneMid-4 && uVar9 < count {
+			subOffset += 2
+			seg[uVar9] = int(s16trunc(seg[uVar9] + avgAt(idx)))
+			uVar9++
+			idx = subOffset
+		}
+		for cur := zoneMid - 4; cur < zoneMid && uVar9 < count; cur++ {
+			seg[uVar9] = int(s16trunc(seg[uVar9] + avgAt(cur)))
+			uVar9++
+		}
+		newPos := mode1Upsample(output, maxEnd, seg[:uVar9], uVar9, lead, pos, (cVar2-1)&1)
+		if newPos < 0 {
+			return -1
+		}
+		pos = newPos
+	}
+
+	remaining := count - uVar9
+	if remaining <= 0 {
+		return pos
+	}
+
+	// Determine the QRS-core span written directly to the output.
+	var sVar6 int
+	if zoneEnd-zoneMid < remaining {
+		sVar6 = zoneEnd + 1
+	} else {
+		sVar6 = (zoneMid - uVar9) + count
+	}
+	if pos-zoneMid+sVar6 > maxEnd {
+		return -1
+	}
+
+	avgIdx := zoneMid
+	// Part 2: QRS core — direct output write of residual + median.
+	if zoneMid < sVar6 {
+		avgPos := zoneMid
+		for n := sVar6 - zoneMid; n > 0 && uVar9 < count; n-- {
+			writeOut(pos, seg[uVar9]+avgAt(avgPos))
+			pos++
+			uVar9++
+			avgPos++
+		}
+		avgIdx = avgPos
+	}
+
+	// Part 3: post-zone median addition (stride 2, then stride 1 for the tail).
+	segIdx := uVar9
+	for segIdx < count-4 {
+		seg[segIdx] = int(s16trunc(seg[segIdx] + avgAt(avgIdx)))
+		avgIdx += 2
+		segIdx++
+	}
+	if param == 0 {
+		avgIdx--
+	}
+	for segIdx < count {
+		seg[segIdx] = int(s16trunc(seg[segIdx] + avgAt(avgIdx)))
+		avgIdx++
+		segIdx++
+	}
+
+	postCount := count - uVar9
+	if postCount > 0 {
+		newPos := mode1Upsample(output, maxEnd, seg[uVar9:], postCount, lead, pos, param)
+		if newPos >= 0 {
+			pos = newPos
+		}
+	}
+	return pos
 }
