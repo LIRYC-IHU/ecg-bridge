@@ -78,7 +78,7 @@ func TestDecodeLeads_vs_FDAGroundTruth(t *testing.T) {
 
 	// Pass data from section start to EOF so V6 bitstream can read past the nominal boundary
 	recData := dat[recSec.offset+14:] // 14 = pecHeaderSize
-	decoded, err := DecodeLeads(recData, nSamples)
+	decoded, err := DecodeLeads(recData, nSamples, buildAvgTemplates(dat))
 	if err != nil {
 		t.Fatalf("DecodeLeads: %v", err)
 	}
@@ -194,7 +194,7 @@ func TestDeriveLeads_vs_FDAGroundTruth(t *testing.T) {
 	}
 
 	recData := dat[recSec.offset+14:]
-	decoded, err := DecodeLeads(recData, nSamples)
+	decoded, err := DecodeLeads(recData, nSamples, buildAvgTemplates(dat))
 	if err != nil {
 		t.Fatalf("DecodeLeads: %v", err)
 	}
