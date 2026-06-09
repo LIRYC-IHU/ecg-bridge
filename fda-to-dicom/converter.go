@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 
+	dicomconf "converter-fda/dicomconf"
+
 	"github.com/suyashkumar/dicom"
 )
 
@@ -26,6 +28,7 @@ func Convert(inputPath, outputPath string) error {
 	}
 	defer f.Close()
 
+	dicomconf.Finalize(&ds)
 	if err := dicom.Write(f, ds); err != nil {
 		return fmt.Errorf("writing DICOM: %w", err)
 	}
