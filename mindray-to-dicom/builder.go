@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	dicomconf "converter-fda/dicomconf"
 	mindraytofda "converter-fda/mindray-to-fda"
 
 	"github.com/suyashkumar/dicom"
@@ -16,21 +17,6 @@ const (
 )
 
 var leadOrder = [12]string{"I", "II", "III", "aVR", "aVL", "aVF", "V1", "V2", "V3", "V4", "V5", "V6"}
-
-var scpecgLeadCode = map[string]string{
-	"I":   "5.6.3-9-1",
-	"II":  "5.6.3-9-2",
-	"III": "5.6.3-9-3",
-	"aVR": "5.6.3-9-4",
-	"aVL": "5.6.3-9-5",
-	"aVF": "5.6.3-9-6",
-	"V1":  "5.6.3-9-7",
-	"V2":  "5.6.3-9-8",
-	"V3":  "5.6.3-9-9",
-	"V4":  "5.6.3-9-10",
-	"V5":  "5.6.3-9-11",
-	"V6":  "5.6.3-9-12",
-}
 
 func BuildDICOM(md *mindraytofda.MindrayData) (dicom.Dataset, error) {
 	ds := dicom.Dataset{}
@@ -131,7 +117,7 @@ func buildWaveformItem(md *mindraytofda.MindrayData, numSamples int) ([]*dicom.E
 }
 
 func buildChannelDef(leadName string, md *mindraytofda.MindrayData) ([]*dicom.Element, error) {
-	codeValue := scpecgLeadCode[leadName]
+	codeValue := dicomconf.SCPECGLeadCode(leadName)
 
 	srcSeq, err := dicom.NewElement(tag.ChannelSourceSequence, [][]*dicom.Element{
 		{
