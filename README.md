@@ -62,6 +62,11 @@ go install github.com/LIRYC-IHU/ecg-bridge/cmd/muse-to-dicom@latest
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/muse-to-fda@latest
 ```
 
+- `nk-to-dicom` 
+```bash
+go install github.com/LIRYC-IHU/ecg-bridge/cmd/nk-to-dicom@latest
+```
+
 - `nk-to-fda` 
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/nk-to-fda@latest
