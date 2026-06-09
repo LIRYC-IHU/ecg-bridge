@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	dicomconf "converter-fda/dicomconf"
 	mindraytofda "converter-fda/mindray-to-fda"
 
 	"github.com/suyashkumar/dicom"
@@ -36,6 +37,7 @@ func Convert(inputPath, outputPath string) error {
 	}
 	defer f.Close()
 
+	dicomconf.Finalize(&ds)
 	if err := dicom.Write(f, ds); err != nil {
 		return fmt.Errorf("writing DICOM: %w", err)
 	}
