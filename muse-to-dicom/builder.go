@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 
+	dicomconf "converter-fda/dicomconf"
 	musetofda "converter-fda/muse-to-fda"
 
 	"github.com/suyashkumar/dicom"
@@ -22,21 +23,6 @@ const (
 // leadOrder is the canonical 12-lead order, matching MuseData lead indices.
 var leadOrder = [12]string{"I", "II", "III", "aVR", "aVL", "aVF", "V1", "V2", "V3", "V4", "V5", "V6"}
 
-// scpecgLeadCode maps a DICOM lead name to its SCPECG CodeValue.
-var scpecgLeadCode = map[string]string{
-	"I":   "5.6.3-9-1",
-	"II":  "5.6.3-9-2",
-	"III": "5.6.3-9-3",
-	"aVR": "5.6.3-9-4",
-	"aVL": "5.6.3-9-5",
-	"aVF": "5.6.3-9-6",
-	"V1":  "5.6.3-9-7",
-	"V2":  "5.6.3-9-8",
-	"V3":  "5.6.3-9-9",
-	"V4":  "5.6.3-9-10",
-	"V5":  "5.6.3-9-11",
-	"V6":  "5.6.3-9-12",
-}
 
 // BuildDICOM constructs a DICOM 12-lead ECG dataset from MuseData.
 func BuildDICOM(d *musetofda.MuseData) (dicom.Dataset, error) {
@@ -154,7 +140,7 @@ func buildWaveformItem(d *musetofda.MuseData, originality, label string, leads [
 func buildChannelDef(leadName string, d *musetofda.MuseData) ([]*dicom.Element, error) {
 	srcSeq, err := dicom.NewElement(tag.ChannelSourceSequence, [][]*dicom.Element{
 		{
-			mustElem(tag.CodeValue, []string{scpecgLeadCode[leadName]}),
+			mustElem(tag.CodeValue, []string{dicomconf.SCPECGLeadCode(leadName)}),
 			mustElem(tag.CodingSchemeDesignator, []string{"SCPECG"}),
 			mustElem(tag.CodeMeaning, []string{leadName}),
 		},
