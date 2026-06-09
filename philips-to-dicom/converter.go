@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	dicomconf "converter-fda/dicomconf"
+
 	"github.com/suyashkumar/dicom"
 )
 
@@ -48,6 +50,7 @@ func ConvertWithOptions(inputPath, outputPath string, opts Options) error {
 	}
 	defer f.Close()
 
+	dicomconf.Finalize(&ds)
 	if err := dicom.Write(f, ds); err != nil {
 		return fmt.Errorf("writing DICOM: %w", err)
 	}
