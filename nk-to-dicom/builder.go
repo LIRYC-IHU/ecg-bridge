@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 
+	dicomconf "converter-fda/dicomconf"
 	nktofda "converter-fda/nk-to-fda"
 
 	"github.com/suyashkumar/dicom"
@@ -135,29 +136,13 @@ func buildWaveformItem(nd *nktofda.NKData) ([]*dicom.Element, error) {
 		"V6":  nd.Leads["V6"],
 	}
 
-	// SCPECG codes for leads
-	scpecgCodes := map[string]string{
-		"I":   "5.6.3-9-1",
-		"II":  "5.6.3-9-2",
-		"III": "5.6.3-9-61",
-		"aVR": "5.6.3-9-62",
-		"aVL": "5.6.3-9-63",
-		"aVF": "5.6.3-9-64",
-		"V1":  "5.6.3-9-3",
-		"V2":  "5.6.3-9-4",
-		"V3":  "5.6.3-9-5",
-		"V4":  "5.6.3-9-6",
-		"V5":  "5.6.3-9-7",
-		"V6":  "5.6.3-9-8",
-	}
-
 	nSamples := nd.Record.TotalSamples
 	nChannels := 12
 
 	// Build ChannelDefinitionSequence
 	channelItems := make([][]*dicom.Element, 0, nChannels)
 	for _, name := range leadOrder {
-		ch, err := buildChannelDef(name, scpecgCodes[name], nd.Record.Scale)
+		ch, err := buildChannelDef(name, dicomconf.SCPECGLeadCode(name), nd.Record.Scale)
 		if err != nil {
 			return nil, fmt.Errorf("channel %s: %w", name, err)
 		}
