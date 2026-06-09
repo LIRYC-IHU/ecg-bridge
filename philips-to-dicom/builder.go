@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	dicomconf "converter-fda/dicomconf"
+
 	"github.com/suyashkumar/dicom"
 	"github.com/suyashkumar/dicom/pkg/tag"
 )
@@ -12,22 +14,6 @@ const (
 	sopClassUID12LeadECG     = "1.2.840.10008.5.1.4.1.1.9.1.1"
 	transferSyntaxExplicitLE = "1.2.840.10008.1.2.1"
 )
-
-// scpecgLeadCode maps DICOM lead name to SCPECG CodeValue.
-var scpecgLeadCode = map[string]string{
-	"I":   "5.6.3-9-1",
-	"II":  "5.6.3-9-2",
-	"III": "5.6.3-9-3",
-	"aVR": "5.6.3-9-4",
-	"aVL": "5.6.3-9-5",
-	"aVF": "5.6.3-9-6",
-	"V1":  "5.6.3-9-7",
-	"V2":  "5.6.3-9-8",
-	"V3":  "5.6.3-9-9",
-	"V4":  "5.6.3-9-10",
-	"V5":  "5.6.3-9-11",
-	"V6":  "5.6.3-9-12",
-}
 
 // BuildDICOM constructs a DICOM dataset from PhilipsData.
 func BuildDICOM(d *PhilipsData) (dicom.Dataset, error) {
@@ -158,7 +144,7 @@ func buildDerivedItem(d *PhilipsData) ([]*dicom.Element, error) {
 
 // buildChannelDef creates a ChannelDefinitionSequence item for one lead.
 func buildChannelDef(leadName string, d *PhilipsData) ([]*dicom.Element, error) {
-	codeValue := scpecgLeadCode[leadName]
+	codeValue := dicomconf.SCPECGLeadCode(leadName)
 
 	// ChannelSourceSequence
 	srcSeq, err := dicom.NewElement(tag.ChannelSourceSequence, [][]*dicom.Element{
