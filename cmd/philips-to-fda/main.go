@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"converter-fda/metaject"
 	philipstodicom "converter-fda/philips-to-dicom"
 	philipstofda "converter-fda/philips-to-fda"
 
@@ -28,7 +29,13 @@ into FDA-compliant annotated ECG XML (aECG) format.
 Examples:
   philips-to-fda --input ecg.xml --output ecg_fda.xml
   philips-to-fda --input ecg.xml --debug
-  philips-to-fda --input ecg.xml | xmllint --format -`,
+  philips-to-fda --input ecg.xml | xmllint --format -
+
+Inject metadata (JSON on stdin):
+  Pipe a JSON object to overwrite patient/study fields before conversion.
+  A field present (even "") overwrites; an absent field keeps the file value.
+  Keys: patientID, patientName ("LAST^FIRST"), gender, age, datetime ("YYYYMMDDHHMMSS")
+  echo '{"patientID":"12345","patientName":"DOE^John"}' | philips-to-fda -i ecg.xml -o out.xml`,
 	RunE: runConvert,
 }
 
@@ -65,7 +72,12 @@ func runConvert(cmd *cobra.Command, args []string) error {
 		printDebug(data)
 	}
 
-	if err := philipstofda.Convert(inputPath, outputPath, anonymize); err != nil {
+	meta, err := metaject.FromStdin()
+	if err != nil {
+		return fmt.Errorf("reading injection metadata from stdin: %w", err)
+	}
+
+	if err := philipstofda.Convert(inputPath, outputPath, anonymize, meta); err != nil {
 		return fmt.Errorf("conversion failed: %w", err)
 	}
 

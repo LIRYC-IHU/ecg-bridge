@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"converter-fda/metaject"
 	mindraytofda "converter-fda/mindray-to-fda"
 
 	"github.com/spf13/cobra"
@@ -27,7 +28,13 @@ into FDA-compliant HL7 annotated ECG XML (aECG) format.
 Examples:
   mindray-to-fda --input 12lead_data_v1 --output ecg.xml
   mindray-to-fda --input 12lead_data_v1 --metadata-json
-  mindray-to-fda --input 12lead_data_v1 | xmllint --format -`,
+  mindray-to-fda --input 12lead_data_v1 | xmllint --format -
+
+Inject metadata (JSON on stdin):
+  Pipe a JSON object to overwrite patient/acquisition fields before conversion.
+  A field present (even "") overwrites; an absent field keeps the file value.
+  Keys: patientID, patientName, gender, datetime ("YYYYMMDDHHMMSS")
+  echo '{"patientID":"12345","patientName":"DOE^John"}' | mindray-to-fda -i 12lead_data_v1 -o out.xml`,
 	RunE: runConvert,
 }
 
@@ -60,7 +67,12 @@ func runConvert(cmd *cobra.Command, args []string) error {
 		printDebug()
 	}
 
-	if err := mindraytofda.Convert(inputPath, outputPath, anonymize); err != nil {
+	meta, err := metaject.FromStdin()
+	if err != nil {
+		return fmt.Errorf("reading injection metadata from stdin: %w", err)
+	}
+
+	if err := mindraytofda.Convert(inputPath, outputPath, anonymize, meta); err != nil {
 		return fmt.Errorf("conversion failed: %w", err)
 	}
 

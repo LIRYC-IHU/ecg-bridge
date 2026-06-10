@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"converter-fda/metaject"
 	nktodicom "converter-fda/nk-to-dicom"
 	nktofda "converter-fda/nk-to-fda"
 
@@ -27,7 +28,14 @@ into DICOM 12-lead ECG Waveform Storage format (SOP Class 1.2.840.10008.5.1.4.1.
 
 Examples:
   nk-to-dicom --input 00000005.DAT --output ecg.dcm
-  nk-to-dicom -i patient.DAT -o output.dcm --debug`,
+  nk-to-dicom -i patient.DAT -o output.dcm --debug
+
+Inject metadata (JSON on stdin):
+  Pipe a JSON object to overwrite patient/recording fields before conversion.
+  A field present (even "") overwrites; an absent field keeps the file value.
+  Keys: patientID, familyName, givenName (or patientName "LAST^FIRST"), gender,
+        birthDate ("YYYYMMDD"), datetime ("YYYYMMDDHHMMSS")
+  echo '{"patientID":"12345","familyName":"DOE","givenName":"John"}' | nk-to-dicom -i 00000005.DAT -o ecg.dcm`,
 	RunE: runConvert,
 }
 
@@ -52,7 +60,12 @@ func runConvert(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "Converting %s → %s\n", inputPath, outputPath)
 
-	if err := nktodicom.Convert(inputPath, outputPath, anonymize); err != nil {
+	meta, err := metaject.FromStdin()
+	if err != nil {
+		return fmt.Errorf("reading injection metadata from stdin: %w", err)
+	}
+
+	if err := nktodicom.Convert(inputPath, outputPath, anonymize, meta); err != nil {
 		return fmt.Errorf("conversion failed: %w", err)
 	}
 

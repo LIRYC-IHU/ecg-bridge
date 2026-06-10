@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"converter-fda/metaject"
 	philipstodicom "converter-fda/philips-to-dicom"
 
 	"github.com/spf13/cobra"
@@ -28,7 +29,13 @@ into DICOM 12-Lead ECG Waveform Storage (.dcm) format.
 Examples:
   philips-to-dicom --input ecg.xml
   philips-to-dicom --input ecg.xml --output ecg.dcm
-  philips-to-dicom --input ecg.xml --output ecg.dcm --debug`,
+  philips-to-dicom --input ecg.xml --output ecg.dcm --debug
+
+Inject metadata (JSON on stdin):
+  Pipe a JSON object to overwrite patient/study fields before conversion.
+  A field present (even "") overwrites; an absent field keeps the file value.
+  Keys: patientID, patientName ("LAST^FIRST"), gender, age, datetime ("YYYYMMDDHHMMSS")
+  echo '{"patientID":"12345","patientName":"DOE^John"}' | philips-to-dicom -i ecg.xml -o ecg.dcm`,
 	RunE: runConvert,
 }
 
@@ -36,7 +43,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&inputPath, "input", "i", "", "Path to Philips SierraECG XML file (required)")
 	rootCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output DICOM file (.dcm) (default: stdout)")
 	rootCmd.Flags().BoolVarP(&debugMode, "debug", "d", false, "Print parsed fields to stderr before converting")
-	rootCmd.Flags().BoolVarP(&anonymize, "anonymize", "a", false, "Remove patient-identifying fields (name, ID, age, sex)")
+	rootCmd.Flags().BoolVarP(&anonymize, "anonymize", "a", false, "Strip patient-identifying fields (name, ID, birth date) from the output")
 	rootCmd.Flags().BoolVar(&metadataJSON, "metadata-json", false, "Output patient metadata as JSON (no waveform)")
 
 	_ = rootCmd.MarkFlagRequired("input")
@@ -68,7 +75,12 @@ func runConvert(cmd *cobra.Command, args []string) error {
 		printDebug(data)
 	}
 
-	if err := philipstodicom.ConvertWithOptions(inputPath, outputPath, philipstodicom.Options{Anonymize: anonymize}); err != nil {
+	meta, err := metaject.FromStdin()
+	if err != nil {
+		return fmt.Errorf("reading injection metadata from stdin: %w", err)
+	}
+
+	if err := philipstodicom.ConvertWithOptions(inputPath, outputPath, philipstodicom.Options{Anonymize: anonymize, Meta: meta}); err != nil {
 		return fmt.Errorf("conversion failed: %w", err)
 	}
 

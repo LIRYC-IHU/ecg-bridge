@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"converter-fda/metaject"
 	musetodicom "converter-fda/muse-to-dicom"
 	musetofda "converter-fda/muse-to-fda"
 
@@ -25,7 +26,13 @@ var rootCmd = &cobra.Command{
 DICOM 12-lead ECG Waveform Storage format.
 
 Examples:
-  muse-to-dicom --input ecg.xml --output ecg.dcm`,
+  muse-to-dicom --input ecg.xml --output ecg.dcm
+
+Inject metadata (JSON on stdin):
+  Pipe a JSON object to overwrite patient/study fields before conversion.
+  A field present (even "") overwrites; an absent field keeps the file value.
+  Keys: patientID, patientName ("LAST^FIRST"), gender, age, datetime ("YYYYMMDDHHMMSS")
+  echo '{"patientID":"12345","patientName":"DOE^John"}' | muse-to-dicom -i ecg.xml -o ecg.dcm`,
 	RunE: runConvert,
 }
 
@@ -53,7 +60,12 @@ func runConvert(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Fprintf(os.Stderr, "Converting %s → %s\n", inputPath, dest)
 
-	if err := musetodicom.Convert(inputPath, outputPath, anonymize); err != nil {
+	meta, err := metaject.FromStdin()
+	if err != nil {
+		return fmt.Errorf("reading injection metadata from stdin: %w", err)
+	}
+
+	if err := musetodicom.Convert(inputPath, outputPath, anonymize, meta); err != nil {
 		return fmt.Errorf("conversion failed: %w", err)
 	}
 

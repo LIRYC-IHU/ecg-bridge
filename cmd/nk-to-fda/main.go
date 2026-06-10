@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"converter-fda/metaject"
 	nktofda "converter-fda/nk-to-fda"
 
 	"github.com/spf13/cobra"
@@ -27,7 +28,14 @@ into FDA-compliant HL7 annotated ECG XML (aECG) format.
 Examples:
   nk-to-fda --input 00000005.DAT --output ecg.xml
   nk-to-fda --input 00000005.DAT --metadata-json
-  nk-to-fda --input 00000005.DAT | xmllint --format -`,
+  nk-to-fda --input 00000005.DAT | xmllint --format -
+
+Inject metadata (JSON on stdin):
+  Pipe a JSON object to overwrite patient/recording fields before conversion.
+  A field present (even "") overwrites; an absent field keeps the file value.
+  Keys: patientID, familyName, givenName (or patientName "LAST^FIRST"), gender,
+        birthDate ("YYYYMMDD"), datetime ("YYYYMMDDHHMMSS")
+  echo '{"patientID":"12345","familyName":"DOE","givenName":"John"}' | nk-to-fda -i 00000005.DAT -o out.xml`,
 	RunE: runConvert,
 }
 
@@ -60,7 +68,12 @@ func runConvert(cmd *cobra.Command, args []string) error {
 		printDebug()
 	}
 
-	if err := nktofda.Convert(inputPath, outputPath, anonymize); err != nil {
+	meta, err := metaject.FromStdin()
+	if err != nil {
+		return fmt.Errorf("reading injection metadata from stdin: %w", err)
+	}
+
+	if err := nktofda.Convert(inputPath, outputPath, anonymize, meta); err != nil {
 		return fmt.Errorf("conversion failed: %w", err)
 	}
 
