@@ -1,6 +1,11 @@
 package nktofda
 
-import "time"
+import (
+	"strings"
+	"time"
+
+	"converter-fda/metaject"
+)
 
 // NKData holds all data extracted from a NK .DAT file.
 type NKData struct {
@@ -18,6 +23,41 @@ func (d *NKData) Anonymize() {
 	d.Patient.GivenName = ""
 	d.Patient.PatientID = ""
 	d.Patient.BirthDate = ""
+}
+
+// ApplyMetadata overwrites patient-identity and recording-date fields from ov.
+// Only fields present in ov are applied; nil fields leave the parsed value.
+// A combined PatientName ("LAST^FIRST") is split into family/given; explicit
+// familyName/givenName fields take precedence over the combined form.
+func (d *NKData) ApplyMetadata(ov *metaject.Override) {
+	if ov == nil {
+		return
+	}
+	if ov.PatientID != nil {
+		d.Patient.PatientID = *ov.PatientID
+	}
+	if ov.PatientName != nil {
+		fam, giv, _ := strings.Cut(*ov.PatientName, "^")
+		d.Patient.FamilyName = fam
+		d.Patient.GivenName = giv
+	}
+	if ov.FamilyName != nil {
+		d.Patient.FamilyName = *ov.FamilyName
+	}
+	if ov.GivenName != nil {
+		d.Patient.GivenName = *ov.GivenName
+	}
+	if ov.Gender != nil {
+		d.Patient.Gender = *ov.Gender
+	}
+	if ov.BirthDate != nil {
+		d.Patient.BirthDate = *ov.BirthDate
+	}
+	if ov.Datetime != nil {
+		if t, ok := metaject.ParseDatetime(*ov.Datetime); ok {
+			d.Patient.RecordingAt = t
+		}
+	}
 }
 
 // PatientData holds demographic data from PATIENT + PATIENT2 sections.

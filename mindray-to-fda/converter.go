@@ -8,13 +8,16 @@ import (
 	"os"
 	"strings"
 
+	"converter-fda/metaject"
+
 	"github.com/LIRYC-IHU/hl7v3-aecg/hl7aecg"
 	"github.com/LIRYC-IHU/hl7v3-aecg/hl7aecg/types"
 )
 
 // Convert parses a Mindray file and writes FDA aECG XML.
 // When anonymize is true, direct patient identifiers are stripped from the output.
-func Convert(inputPath, outputPath string, anonymize bool) error {
+// When meta is non-nil, its fields overwrite the parsed metadata (injection).
+func Convert(inputPath, outputPath string, anonymize bool, meta *metaject.Override) error {
 	dat, err := os.ReadFile(inputPath)
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", inputPath, err)
@@ -28,6 +31,7 @@ func Convert(inputPath, outputPath string, anonymize bool) error {
 	if anonymize {
 		md.Anonymize()
 	}
+	md.ApplyMetadata(meta)
 
 	xmlStr, err := buildAECG(md)
 	if err != nil {

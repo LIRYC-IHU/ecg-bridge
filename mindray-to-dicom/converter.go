@@ -5,6 +5,7 @@ import (
 	"os"
 
 	dicomconf "converter-fda/dicomconf"
+	"converter-fda/metaject"
 	mindraytofda "converter-fda/mindray-to-fda"
 
 	"github.com/suyashkumar/dicom"
@@ -12,7 +13,8 @@ import (
 
 // Convert parses a Mindray file and writes a DICOM ECG file.
 // When anonymize is true, direct patient identifiers are stripped from the output.
-func Convert(inputPath, outputPath string, anonymize bool) error {
+// When meta is non-nil, its fields overwrite the parsed metadata (injection).
+func Convert(inputPath, outputPath string, anonymize bool, meta *metaject.Override) error {
 	dat, err := os.ReadFile(inputPath)
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", inputPath, err)
@@ -26,6 +28,7 @@ func Convert(inputPath, outputPath string, anonymize bool) error {
 	if anonymize {
 		md.Anonymize()
 	}
+	md.ApplyMetadata(meta)
 
 	ds, err := BuildDICOM(md)
 	if err != nil {

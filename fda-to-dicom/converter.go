@@ -6,13 +6,15 @@ import (
 	"strings"
 
 	dicomconf "converter-fda/dicomconf"
+	"converter-fda/metaject"
 
 	"github.com/suyashkumar/dicom"
 )
 
 // Convert reads an FDA aECG XML file and writes a DICOM ECG file.
 // When anonymize is true, direct patient identifiers are stripped from the output.
-func Convert(inputPath, outputPath string, anonymize bool) error {
+// When meta is non-nil, its fields overwrite the parsed metadata (injection).
+func Convert(inputPath, outputPath string, anonymize bool, meta *metaject.Override) error {
 	data, err := ParseFDA(inputPath)
 	if err != nil {
 		return fmt.Errorf("parsing FDA XML: %w", err)
@@ -21,6 +23,7 @@ func Convert(inputPath, outputPath string, anonymize bool) error {
 	if anonymize {
 		data.Anonymize()
 	}
+	data.ApplyMetadata(meta)
 
 	ds, err := BuildDICOM(data)
 	if err != nil {

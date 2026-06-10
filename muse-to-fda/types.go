@@ -1,6 +1,10 @@
 package musetofda
 
-import "encoding/xml"
+import (
+	"encoding/xml"
+
+	"converter-fda/metaject"
+)
 
 // MuseData is the intermediate representation parsed from a GE MUSE
 // RestingECG XML file, ready to be converted to FDA aECG XML.
@@ -55,6 +59,29 @@ type MuseData struct {
 func (d *MuseData) Anonymize() {
 	d.PatientName = ""
 	d.PatientID = ""
+}
+
+// ApplyMetadata overwrites patient-identity and study-date fields from ov.
+// Only fields present in ov are applied; nil fields leave the parsed value.
+func (d *MuseData) ApplyMetadata(ov *metaject.Override) {
+	if ov == nil {
+		return
+	}
+	if ov.PatientID != nil {
+		d.PatientID = *ov.PatientID
+	}
+	if ov.PatientName != nil {
+		d.PatientName = *ov.PatientName
+	}
+	if ov.Gender != nil {
+		d.PatientSex = *ov.Gender
+	}
+	if ov.Age != nil {
+		d.PatientAge = *ov.Age
+	}
+	if ov.Datetime != nil {
+		d.StudyDate, d.StudyTime = metaject.SplitDatetime(*ov.Datetime)
+	}
 }
 
 // --- Raw XML structs (GE MUSE RestingECG, DTD restecg.dtd) ---

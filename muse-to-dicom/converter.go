@@ -5,6 +5,7 @@ import (
 	"os"
 
 	dicomconf "converter-fda/dicomconf"
+	"converter-fda/metaject"
 	musetofda "converter-fda/muse-to-fda"
 
 	"github.com/suyashkumar/dicom"
@@ -13,7 +14,8 @@ import (
 // Convert parses a GE MUSE RestingECG XML file and writes a DICOM
 // 12-lead ECG waveform file. If outputPath is empty, output goes to stdout.
 // When anonymize is true, direct patient identifiers are stripped from the output.
-func Convert(inputPath, outputPath string, anonymize bool) error {
+// When meta is non-nil, its fields overwrite the parsed metadata (injection).
+func Convert(inputPath, outputPath string, anonymize bool, meta *metaject.Override) error {
 	data, err := os.ReadFile(inputPath)
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", inputPath, err)
@@ -27,6 +29,7 @@ func Convert(inputPath, outputPath string, anonymize bool) error {
 	if anonymize {
 		d.Anonymize()
 	}
+	d.ApplyMetadata(meta)
 
 	ds, err := BuildDICOM(d)
 	if err != nil {

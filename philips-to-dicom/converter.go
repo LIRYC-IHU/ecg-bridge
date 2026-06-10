@@ -5,6 +5,7 @@ import (
 	"os"
 
 	dicomconf "converter-fda/dicomconf"
+	"converter-fda/metaject"
 
 	"github.com/suyashkumar/dicom"
 )
@@ -12,6 +13,7 @@ import (
 // Options holds optional conversion parameters.
 type Options struct {
 	Anonymize bool
+	Meta      *metaject.Override // non-nil → inject/overwrite parsed metadata
 }
 
 // Convert reads a Philips SierraECG XML file and writes a DICOM ECG file.
@@ -29,6 +31,7 @@ func ConvertWithOptions(inputPath, outputPath string, opts Options) error {
 	if opts.Anonymize {
 		data.Anonymize()
 	}
+	data.ApplyMetadata(opts.Meta)
 
 	ds, err := BuildDICOM(data)
 	if err != nil {

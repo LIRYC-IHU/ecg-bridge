@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"converter-fda/metaject"
 )
 
 // PhilipsData is the unified model extracted from a Philips SierraECG XML file.
@@ -74,6 +76,29 @@ type PhilipsData struct {
 func (d *PhilipsData) Anonymize() {
 	d.PatientName = ""
 	d.PatientID = ""
+}
+
+// ApplyMetadata overwrites patient-identity and study-date fields from ov.
+// Only fields present in ov are applied; nil fields leave the parsed value.
+func (d *PhilipsData) ApplyMetadata(ov *metaject.Override) {
+	if ov == nil {
+		return
+	}
+	if ov.PatientID != nil {
+		d.PatientID = *ov.PatientID
+	}
+	if ov.PatientName != nil {
+		d.PatientName = *ov.PatientName
+	}
+	if ov.Gender != nil {
+		d.PatientSex = *ov.Gender
+	}
+	if ov.Age != nil {
+		d.PatientAge = *ov.Age
+	}
+	if ov.Datetime != nil {
+		d.StudyDate, d.StudyTime = metaject.SplitDatetime(*ov.Datetime)
+	}
 }
 
 const philipsNamespace = "http://www3.medical.philips.com"

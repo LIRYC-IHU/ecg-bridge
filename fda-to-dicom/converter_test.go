@@ -193,7 +193,7 @@ func TestDICOMDeviceSerial(t *testing.T) {
 		t.Skip("Mindray test file not found")
 	}
 	output := filepath.Join(t.TempDir(), "mindray.dcm")
-	if err := Convert(testMindrayXML, output, false); err != nil {
+	if err := Convert(testMindrayXML, output, false, nil); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 	ds, err := dicom.ParseFile(output, nil)
@@ -218,7 +218,7 @@ func TestDICOMDeviceSerial(t *testing.T) {
 func TestDICOMAnnotationChannels(t *testing.T) {
 	requireFDADir(t)
 	output := filepath.Join(t.TempDir(), "bs1170.dcm")
-	if err := Convert(filepath.Join(testFDADir, "BS1170.xml"), output, false); err != nil {
+	if err := Convert(filepath.Join(testFDADir, "BS1170.xml"), output, false, nil); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 	ds, err := dicom.ParseFile(output, nil)
@@ -260,7 +260,7 @@ func TestDICOMAnnotationChannels(t *testing.T) {
 func TestDICOMWaveformItems(t *testing.T) {
 	requireFDADir(t)
 	output := filepath.Join(t.TempDir(), "bs1170.dcm")
-	if err := Convert(filepath.Join(testFDADir, "BS1170.xml"), output, false); err != nil {
+	if err := Convert(filepath.Join(testFDADir, "BS1170.xml"), output, false, nil); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 	ds, err := dicom.ParseFile(output, nil)
@@ -305,7 +305,7 @@ func TestConvertAll(t *testing.T) {
 		t.Run(patient, func(t *testing.T) {
 			input := filepath.Join(testFDADir, patient+".xml")
 			output := filepath.Join(t.TempDir(), patient+".dcm")
-			if err := Convert(input, output, false); err != nil {
+			if err := Convert(input, output, false, nil); err != nil {
 				t.Fatalf("Convert: %v", err)
 			}
 			info, err := os.Stat(output)
@@ -333,7 +333,7 @@ func TestWaveformCorrelation(t *testing.T) {
 			// Build our DICOM
 			input := filepath.Join(testFDADir, patient+".xml")
 			output := filepath.Join(t.TempDir(), patient+".dcm")
-			if err := Convert(input, output, false); err != nil {
+			if err := Convert(input, output, false, nil); err != nil {
 				t.Fatalf("Convert: %v", err)
 			}
 

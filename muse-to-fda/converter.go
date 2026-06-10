@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 
+	"converter-fda/metaject"
+
 	"github.com/LIRYC-IHU/hl7v3-aecg/hl7aecg"
 	"github.com/LIRYC-IHU/hl7v3-aecg/hl7aecg/types"
 )
@@ -13,7 +15,8 @@ import (
 // Convert parses a GE MUSE RestingECG XML file and writes FDA aECG XML.
 // If outputPath is empty, output is written to stdout.
 // When anonymize is true, direct patient identifiers are stripped from the output.
-func Convert(inputPath, outputPath string, anonymize bool) error {
+// When meta is non-nil, its fields overwrite the parsed metadata (injection).
+func Convert(inputPath, outputPath string, anonymize bool, meta *metaject.Override) error {
 	data, err := os.ReadFile(inputPath)
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", inputPath, err)
@@ -27,6 +30,7 @@ func Convert(inputPath, outputPath string, anonymize bool) error {
 	if anonymize {
 		d.Anonymize()
 	}
+	d.ApplyMetadata(meta)
 
 	xmlStr, err := buildAECG(d)
 	if err != nil {

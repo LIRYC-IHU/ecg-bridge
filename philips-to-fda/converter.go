@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"converter-fda/metaject"
 	philipstodicom "converter-fda/philips-to-dicom"
 
 	"github.com/LIRYC-IHU/hl7v3-aecg/hl7aecg"
@@ -15,7 +16,8 @@ import (
 // Convert parses a Philips SierraECG XML file and writes FDA aECG XML.
 // If outputPath is empty, output is written to stdout.
 // When anonymize is true, direct patient identifiers are stripped from the output.
-func Convert(inputPath, outputPath string, anonymize bool) error {
+// When meta is non-nil, its fields overwrite the parsed metadata (injection).
+func Convert(inputPath, outputPath string, anonymize bool, meta *metaject.Override) error {
 	data, err := philipstodicom.ParsePhilips(inputPath)
 	if err != nil {
 		return fmt.Errorf("parsing Philips XML: %w", err)
@@ -24,6 +26,7 @@ func Convert(inputPath, outputPath string, anonymize bool) error {
 	if anonymize {
 		data.Anonymize()
 	}
+	data.ApplyMetadata(meta)
 
 	xmlStr, err := buildAECG(data)
 	if err != nil {

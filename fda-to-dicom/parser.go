@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	"converter-fda/metaject"
+
 	hl7aecg "github.com/LIRYC-IHU/hl7v3-aecg/hl7aecg"
 	"github.com/LIRYC-IHU/hl7v3-aecg/hl7aecg/types"
 )
@@ -64,6 +66,32 @@ func (d *FDAData) Anonymize() {
 	d.PatientName = ""
 	d.PatientID = ""
 	d.PatientDOB = ""
+}
+
+// ApplyMetadata overwrites patient-identity and study-date fields from ov.
+// Only fields present in ov are applied; nil fields leave the parsed value.
+func (d *FDAData) ApplyMetadata(ov *metaject.Override) {
+	if ov == nil {
+		return
+	}
+	if ov.PatientID != nil {
+		d.PatientID = *ov.PatientID
+	}
+	if ov.PatientName != nil {
+		d.PatientName = *ov.PatientName
+	}
+	if ov.Gender != nil {
+		d.PatientSex = *ov.Gender
+	}
+	if ov.Age != nil {
+		d.PatientAge = *ov.Age
+	}
+	if ov.BirthDate != nil {
+		d.PatientDOB = *ov.BirthDate
+	}
+	if ov.Datetime != nil {
+		d.StudyDate, d.StudyTime = metaject.SplitDatetime(*ov.Datetime)
+	}
 }
 
 // ParseFDA reads an FDA aECG XML file and returns an FDAData.

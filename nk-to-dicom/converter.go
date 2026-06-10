@@ -5,6 +5,7 @@ import (
 	"os"
 
 	dicomconf "converter-fda/dicomconf"
+	"converter-fda/metaject"
 	nktofda "converter-fda/nk-to-fda"
 
 	"github.com/suyashkumar/dicom"
@@ -12,7 +13,8 @@ import (
 
 // Convert reads a NK .DAT file and writes a DICOM ECG file.
 // When anonymize is true, direct patient identifiers are stripped from the output.
-func Convert(inputPath, outputPath string, anonymize bool) error {
+// When meta is non-nil, its fields overwrite the parsed metadata (injection).
+func Convert(inputPath, outputPath string, anonymize bool, meta *metaject.Override) error {
 	// 1. Read and parse NK file
 	dat, err := os.ReadFile(inputPath)
 	if err != nil {
@@ -27,6 +29,7 @@ func Convert(inputPath, outputPath string, anonymize bool) error {
 	if anonymize {
 		nd.Anonymize()
 	}
+	nd.ApplyMetadata(meta)
 
 	// 2. Decode waveforms (all 8 measured leads, incl. QRS-zone reconstruction).
 	leads, err := nktofda.DecodeWaveforms(dat, nd.Record.TotalSamples)
