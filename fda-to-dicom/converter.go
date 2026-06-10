@@ -11,10 +11,15 @@ import (
 )
 
 // Convert reads an FDA aECG XML file and writes a DICOM ECG file.
-func Convert(inputPath, outputPath string) error {
+// When anonymize is true, direct patient identifiers are stripped from the output.
+func Convert(inputPath, outputPath string, anonymize bool) error {
 	data, err := ParseFDA(inputPath)
 	if err != nil {
 		return fmt.Errorf("parsing FDA XML: %w", err)
+	}
+
+	if anonymize {
+		data.Anonymize()
 	}
 
 	ds, err := BuildDICOM(data)

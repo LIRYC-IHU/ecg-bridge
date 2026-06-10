@@ -16,6 +16,7 @@ var (
 	outputPath   string
 	debugMode    bool
 	metadataJSON bool
+	anonymize    bool
 )
 
 var rootCmd = &cobra.Command{
@@ -35,6 +36,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output DICOM file (required)")
 	rootCmd.Flags().BoolVarP(&debugMode, "debug", "d", false, "Print debug information to stderr")
 	rootCmd.Flags().BoolVar(&metadataJSON, "metadata-json", false, "Output patient metadata as JSON (no waveform)")
+	rootCmd.Flags().BoolVarP(&anonymize, "anonymize", "a", false, "Strip patient-identifying fields (name, ID, birth date) from the output")
 
 	_ = rootCmd.MarkFlagRequired("input")
 }
@@ -50,7 +52,7 @@ func runConvert(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "Converting %s → %s\n", inputPath, outputPath)
 
-	if err := nktodicom.Convert(inputPath, outputPath); err != nil {
+	if err := nktodicom.Convert(inputPath, outputPath, anonymize); err != nil {
 		return fmt.Errorf("conversion failed: %w", err)
 	}
 

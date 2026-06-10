@@ -12,7 +12,8 @@ import (
 
 // Convert parses a GE MUSE RestingECG XML file and writes a DICOM
 // 12-lead ECG waveform file. If outputPath is empty, output goes to stdout.
-func Convert(inputPath, outputPath string) error {
+// When anonymize is true, direct patient identifiers are stripped from the output.
+func Convert(inputPath, outputPath string, anonymize bool) error {
 	data, err := os.ReadFile(inputPath)
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", inputPath, err)
@@ -21,6 +22,10 @@ func Convert(inputPath, outputPath string) error {
 	d, err := musetofda.ParseMuse(data)
 	if err != nil {
 		return fmt.Errorf("parsing MUSE XML: %w", err)
+	}
+
+	if anonymize {
+		d.Anonymize()
 	}
 
 	ds, err := BuildDICOM(d)

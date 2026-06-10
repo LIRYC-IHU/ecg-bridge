@@ -57,6 +57,15 @@ type FDAData struct {
 	RepBeats     map[string][]int16 // DERIVED (representative beat)
 }
 
+// Anonymize blanks the direct patient identifiers (name, ID, birth date)
+// while keeping clinically useful fields (sex, age, study dates, measurements,
+// institution).
+func (d *FDAData) Anonymize() {
+	d.PatientName = ""
+	d.PatientID = ""
+	d.PatientDOB = ""
+}
+
 // ParseFDA reads an FDA aECG XML file and returns an FDAData.
 func ParseFDA(path string) (*FDAData, error) {
 	h := hl7aecg.NewHl7xml("")

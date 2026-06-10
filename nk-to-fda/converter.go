@@ -16,7 +16,8 @@ import (
 
 // Convert parses a NK .DAT file and writes FDA aECG XML to outputPath.
 // If outputPath is empty, output is written to stdout.
-func Convert(inputPath, outputPath string) error {
+// When anonymize is true, direct patient identifiers are stripped from the output.
+func Convert(inputPath, outputPath string, anonymize bool) error {
 	dat, err := os.ReadFile(inputPath)
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", inputPath, err)
@@ -25,6 +26,10 @@ func Convert(inputPath, outputPath string) error {
 	nd, err := ParseFile(dat)
 	if err != nil {
 		return fmt.Errorf("parsing NK file: %w", err)
+	}
+
+	if anonymize {
+		nd.Anonymize()
 	}
 
 	// Decode waveforms

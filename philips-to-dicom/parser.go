@@ -68,6 +68,14 @@ type PhilipsData struct {
 	InterpretationStatements []string // leftstatement / rightstatement (non-empty)
 }
 
+// Anonymize blanks the direct patient identifiers (name, ID) while keeping
+// clinically useful fields (sex, age, acquisition dates, measurements).
+// Philips SierraECG carries no birth date field.
+func (d *PhilipsData) Anonymize() {
+	d.PatientName = ""
+	d.PatientID = ""
+}
+
 const philipsNamespace = "http://www3.medical.philips.com"
 
 // validatePhilipsXML vérifie que le contenu XML est bien un fichier Philips SierraECG.

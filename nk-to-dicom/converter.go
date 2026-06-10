@@ -11,7 +11,8 @@ import (
 )
 
 // Convert reads a NK .DAT file and writes a DICOM ECG file.
-func Convert(inputPath, outputPath string) error {
+// When anonymize is true, direct patient identifiers are stripped from the output.
+func Convert(inputPath, outputPath string, anonymize bool) error {
 	// 1. Read and parse NK file
 	dat, err := os.ReadFile(inputPath)
 	if err != nil {
@@ -21,6 +22,10 @@ func Convert(inputPath, outputPath string) error {
 	nd, err := nktofda.ParseFile(dat)
 	if err != nil {
 		return fmt.Errorf("parsing NK file: %w", err)
+	}
+
+	if anonymize {
+		nd.Anonymize()
 	}
 
 	// 2. Decode waveforms (all 8 measured leads, incl. QRS-zone reconstruction).
