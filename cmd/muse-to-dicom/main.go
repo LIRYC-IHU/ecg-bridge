@@ -12,6 +12,7 @@ import (
 var (
 	inputPath  string
 	outputPath string
+	anonymize  bool
 )
 
 var rootCmd = &cobra.Command{
@@ -28,6 +29,7 @@ Examples:
 func init() {
 	rootCmd.Flags().StringVarP(&inputPath, "input", "i", "", "Path to input MUSE RestingECG XML file (required)")
 	rootCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output DICOM file (optional, defaults to stdout)")
+	rootCmd.Flags().BoolVarP(&anonymize, "anonymize", "a", false, "Strip patient-identifying fields (name, ID, birth date) from the output")
 
 	_ = rootCmd.MarkFlagRequired("input")
 }
@@ -43,7 +45,7 @@ func runConvert(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Fprintf(os.Stderr, "Converting %s → %s\n", inputPath, dest)
 
-	if err := musetodicom.Convert(inputPath, outputPath); err != nil {
+	if err := musetodicom.Convert(inputPath, outputPath, anonymize); err != nil {
 		return fmt.Errorf("conversion failed: %w", err)
 	}
 

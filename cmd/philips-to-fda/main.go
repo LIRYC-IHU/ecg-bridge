@@ -14,6 +14,7 @@ var (
 	inputPath  string
 	outputPath string
 	debugMode  bool
+	anonymize  bool
 )
 
 var rootCmd = &cobra.Command{
@@ -33,6 +34,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&inputPath, "input", "i", "", "Path to input Philips SierraECG XML file (required)")
 	rootCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output FDA XML file (default: stdout)")
 	rootCmd.Flags().BoolVarP(&debugMode, "debug", "d", false, "Print parsed data to stderr before converting")
+	rootCmd.Flags().BoolVarP(&anonymize, "anonymize", "a", false, "Strip patient-identifying fields (name, ID, birth date) from the output")
 
 	_ = rootCmd.MarkFlagRequired("input")
 }
@@ -56,7 +58,7 @@ func runConvert(cmd *cobra.Command, args []string) error {
 		printDebug(data)
 	}
 
-	if err := philipstofda.Convert(inputPath, outputPath); err != nil {
+	if err := philipstofda.Convert(inputPath, outputPath, anonymize); err != nil {
 		return fmt.Errorf("conversion failed: %w", err)
 	}
 

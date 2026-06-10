@@ -14,10 +14,15 @@ import (
 
 // Convert parses a Philips SierraECG XML file and writes FDA aECG XML.
 // If outputPath is empty, output is written to stdout.
-func Convert(inputPath, outputPath string) error {
+// When anonymize is true, direct patient identifiers are stripped from the output.
+func Convert(inputPath, outputPath string, anonymize bool) error {
 	data, err := philipstodicom.ParsePhilips(inputPath)
 	if err != nil {
 		return fmt.Errorf("parsing Philips XML: %w", err)
+	}
+
+	if anonymize {
+		data.Anonymize()
 	}
 
 	xmlStr, err := buildAECG(data)

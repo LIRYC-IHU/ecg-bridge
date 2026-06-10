@@ -20,6 +20,14 @@ type PatientData struct {
 	EndTime   time.Time
 }
 
+// Anonymize blanks the direct patient identifiers (name, ID) while keeping
+// clinically useful fields (sex, location, acquisition dates, measurements).
+// Mindray carries no birth date field.
+func (d *MindrayData) Anonymize() {
+	d.Patient.Name = ""
+	d.Patient.PatientID = ""
+}
+
 type DeviceData struct {
 	SerialNumber string
 	SoftwareName string

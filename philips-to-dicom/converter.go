@@ -27,10 +27,7 @@ func ConvertWithOptions(inputPath, outputPath string, opts Options) error {
 	}
 
 	if opts.Anonymize {
-		data.PatientID = ""
-		data.PatientName = ""
-		data.PatientAge = ""
-		data.PatientSex = ""
+		data.Anonymize()
 	}
 
 	ds, err := BuildDICOM(data)

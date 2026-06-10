@@ -49,6 +49,14 @@ type MuseData struct {
 	DiagnosisStatements []string
 }
 
+// Anonymize blanks the direct patient identifiers (name, ID, birth date)
+// while keeping clinically useful fields (sex, age, acquisition dates,
+// measurements). MUSE carries no birth date field, so only name and ID apply.
+func (d *MuseData) Anonymize() {
+	d.PatientName = ""
+	d.PatientID = ""
+}
+
 // --- Raw XML structs (GE MUSE RestingECG, DTD restecg.dtd) ---
 
 type museXML struct {

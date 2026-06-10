@@ -68,7 +68,7 @@ func TestConvertAll(t *testing.T) {
 		}
 		t.Run(p, func(t *testing.T) {
 			out := filepath.Join(t.TempDir(), p+".xml")
-			if err := philipstofda.Convert(xmlFile, out); err != nil {
+			if err := philipstofda.Convert(xmlFile, out, false); err != nil {
 				t.Fatalf("Convert: %v", err)
 			}
 			if _, err := os.Stat(out); err != nil {
@@ -86,7 +86,7 @@ func TestConvertOutputIsValidXML(t *testing.T) {
 	}
 	xmlFile := firstXML(dir)
 	out := filepath.Join(t.TempDir(), "out.xml")
-	if err := philipstofda.Convert(xmlFile, out); err != nil {
+	if err := philipstofda.Convert(xmlFile, out, false); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 	data, err := os.ReadFile(out)
@@ -112,7 +112,7 @@ func TestAnnotations(t *testing.T) {
 	}
 
 	out := filepath.Join(t.TempDir(), "out.xml")
-	if err := philipstofda.Convert(xmlFile, out); err != nil {
+	if err := philipstofda.Convert(xmlFile, out, false); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 	content, _ := os.ReadFile(out)
@@ -160,7 +160,7 @@ func TestInterpretationFields(t *testing.T) {
 			}
 			xmlFile := firstXML(dir)
 			out := filepath.Join(t.TempDir(), "out.xml")
-			if err := philipstofda.Convert(xmlFile, out); err != nil {
+			if err := philipstofda.Convert(xmlFile, out, false); err != nil {
 				t.Fatalf("Convert: %v", err)
 			}
 			content, _ := os.ReadFile(out)
@@ -223,7 +223,7 @@ func TestWaveformPresent(t *testing.T) {
 	}
 	xmlFile := firstXML(dir)
 	out := filepath.Join(t.TempDir(), "out.xml")
-	if err := philipstofda.Convert(xmlFile, out); err != nil {
+	if err := philipstofda.Convert(xmlFile, out, false); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 	content, _ := os.ReadFile(out)
@@ -246,7 +246,7 @@ func TestFilterValues(t *testing.T) {
 	}
 	xmlFile := firstXML(dir)
 	out := filepath.Join(t.TempDir(), "out.xml")
-	if err := philipstofda.Convert(xmlFile, out); err != nil {
+	if err := philipstofda.Convert(xmlFile, out, false); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 	content, _ := os.ReadFile(out)

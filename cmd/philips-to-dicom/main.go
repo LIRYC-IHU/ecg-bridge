@@ -34,7 +34,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&inputPath, "input", "i", "", "Path to Philips SierraECG XML file (required)")
 	rootCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output DICOM file (.dcm) (default: stdout)")
 	rootCmd.Flags().BoolVarP(&debugMode, "debug", "d", false, "Print parsed fields to stderr before converting")
-	rootCmd.Flags().BoolVarP(&anonymize, "anonymize", "a", false, "Remove patient-identifying fields (name, ID, age, sex)")
+	rootCmd.Flags().BoolVarP(&anonymize, "anonymize", "a", false, "Strip patient-identifying fields (name, ID, birth date) from the output")
 
 	_ = rootCmd.MarkFlagRequired("input")
 }

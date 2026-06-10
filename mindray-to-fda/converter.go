@@ -12,7 +12,9 @@ import (
 	"github.com/LIRYC-IHU/hl7v3-aecg/hl7aecg/types"
 )
 
-func Convert(inputPath, outputPath string) error {
+// Convert parses a Mindray file and writes FDA aECG XML.
+// When anonymize is true, direct patient identifiers are stripped from the output.
+func Convert(inputPath, outputPath string, anonymize bool) error {
 	dat, err := os.ReadFile(inputPath)
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", inputPath, err)
@@ -21,6 +23,10 @@ func Convert(inputPath, outputPath string) error {
 	md, err := ParseFile(dat)
 	if err != nil {
 		return fmt.Errorf("parsing Mindray file: %w", err)
+	}
+
+	if anonymize {
+		md.Anonymize()
 	}
 
 	xmlStr, err := buildAECG(md)

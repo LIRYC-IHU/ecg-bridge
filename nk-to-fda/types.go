@@ -10,6 +10,16 @@ type NKData struct {
 	Leads       map[string][]int32 // 8 measured leads: I, II, V1-V6
 }
 
+// Anonymize blanks the direct patient identifiers (name, ID, birth date)
+// while keeping clinically useful fields (sex, location, recording date,
+// device, measurements).
+func (d *NKData) Anonymize() {
+	d.Patient.FamilyName = ""
+	d.Patient.GivenName = ""
+	d.Patient.PatientID = ""
+	d.Patient.BirthDate = ""
+}
+
 // PatientData holds demographic data from PATIENT + PATIENT2 sections.
 type PatientData struct {
 	FamilyName  string

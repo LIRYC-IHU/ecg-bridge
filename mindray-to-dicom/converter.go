@@ -10,7 +10,9 @@ import (
 	"github.com/suyashkumar/dicom"
 )
 
-func Convert(inputPath, outputPath string) error {
+// Convert parses a Mindray file and writes a DICOM ECG file.
+// When anonymize is true, direct patient identifiers are stripped from the output.
+func Convert(inputPath, outputPath string, anonymize bool) error {
 	dat, err := os.ReadFile(inputPath)
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", inputPath, err)
@@ -19,6 +21,10 @@ func Convert(inputPath, outputPath string) error {
 	md, err := mindraytofda.ParseFile(dat)
 	if err != nil {
 		return fmt.Errorf("parsing Mindray file: %w", err)
+	}
+
+	if anonymize {
+		md.Anonymize()
 	}
 
 	ds, err := BuildDICOM(md)
