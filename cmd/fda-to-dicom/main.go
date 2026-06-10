@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -11,9 +12,10 @@ import (
 )
 
 var (
-	inputPath  string
-	outputPath string
-	debugMode  bool
+	inputPath    string
+	outputPath   string
+	debugMode    bool
+	metadataJSON bool
 )
 
 var rootCmd = &cobra.Command{
@@ -32,9 +34,9 @@ func init() {
 	rootCmd.Flags().StringVarP(&inputPath, "input", "i", "", "Path to FDA aECG XML file (required)")
 	rootCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output DICOM file (.dcm) (required)")
 	rootCmd.Flags().BoolVarP(&debugMode, "debug", "d", false, "Print parsed fields to stderr before converting")
+	rootCmd.Flags().BoolVar(&metadataJSON, "metadata-json", false, "Output patient metadata as JSON (no waveform)")
 
 	_ = rootCmd.MarkFlagRequired("input")
-	_ = rootCmd.MarkFlagRequired("output")
 }
 
 func runConvert(cmd *cobra.Command, args []string) error {
@@ -43,6 +45,14 @@ func runConvert(cmd *cobra.Command, args []string) error {
 	}
 	if !strings.HasSuffix(strings.ToLower(inputPath), ".xml") {
 		return fmt.Errorf("input must be an FDA aECG XML file (.xml), got: %s", inputPath)
+	}
+
+	if metadataJSON {
+		return runMetadataJSON()
+	}
+
+	if outputPath == "" {
+		return fmt.Errorf("output is required (use --output file.dcm)")
 	}
 	if !strings.HasSuffix(strings.ToLower(outputPath), ".dcm") {
 		return fmt.Errorf("output must be a DICOM file (.dcm), got: %s", outputPath)
@@ -67,6 +77,45 @@ func runConvert(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "Done. Output written to %s\n", outputPath)
 	return nil
+}
+
+func runMetadataJSON() error {
+	d, err := fdatodicom.ParseFDA(inputPath)
+	if err != nil {
+		return fmt.Errorf("parsing FDA XML: %w", err)
+	}
+
+	m := map[string]interface{}{
+		"patientID":    d.PatientID,
+		"patientName":  d.PatientName,
+		"gender":       d.PatientSex,
+		"birthDate":    d.PatientDOB,
+		"age":          d.PatientAge,
+		"manufacturer": d.Manufacturer,
+		"deviceModel":  d.ModelName,
+		"serialNumber": d.SerialNumber,
+		"softwareVer":  d.SoftwareVer,
+		"location":     d.InstitutionName,
+		"sampleRate":   d.SamplingRate,
+		"sensitivity":  d.Sensitivity,
+		"heartRate":    d.HeartRate,
+		"prInterval":   d.PRInterval,
+		"qrsDuration":  d.QRSDuration,
+		"qtInterval":   d.QTInterval,
+		"qtcInterval":  d.QTcInterval,
+		"atrialRate":   d.AtrialRate,
+		"pAxis":        d.PFrontAxis,
+		"qrsAxis":      d.QRSFrontAxis,
+		"tAxis":        d.TFrontAxis,
+		"leadsCount":   len(d.Leads),
+	}
+	if d.StudyDate != "" || d.StudyTime != "" {
+		m["datetime"] = d.StudyDate + d.StudyTime
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(m)
 }
 
 func printDebug(d *fdatodicom.FDAData) {

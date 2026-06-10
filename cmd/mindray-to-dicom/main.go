@@ -1,17 +1,20 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
 	mindraytodicom "converter-fda/mindray-to-dicom"
+	mindraytofda "converter-fda/mindray-to-fda"
 
 	"github.com/spf13/cobra"
 )
 
 var (
-	inputPath  string
-	outputPath string
+	inputPath    string
+	outputPath   string
+	metadataJSON bool
 )
 
 var rootCmd = &cobra.Command{
@@ -28,6 +31,7 @@ Examples:
 func init() {
 	rootCmd.Flags().StringVarP(&inputPath, "input", "i", "", "Path to input Mindray file (required)")
 	rootCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output DICOM file (optional, defaults to stdout)")
+	rootCmd.Flags().BoolVar(&metadataJSON, "metadata-json", false, "Output patient metadata as JSON (no waveform)")
 
 	_ = rootCmd.MarkFlagRequired("input")
 }
@@ -35,6 +39,10 @@ func init() {
 func runConvert(cmd *cobra.Command, args []string) error {
 	if _, err := os.Stat(inputPath); os.IsNotExist(err) {
 		return fmt.Errorf("input file not found: %s", inputPath)
+	}
+
+	if metadataJSON {
+		return runMetadataJSON()
 	}
 
 	fmt.Fprintf(os.Stderr, "Converting %s → %s\n", inputPath, outputPath)
@@ -45,6 +53,40 @@ func runConvert(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "Done. Output written to %s\n", outputPath)
 	return nil
+}
+
+func runMetadataJSON() error {
+	dat, err := os.ReadFile(inputPath)
+	if err != nil {
+		return fmt.Errorf("reading file: %w", err)
+	}
+	md, err := mindraytofda.ParseFile(dat)
+	if err != nil {
+		return fmt.Errorf("parsing Mindray file: %w", err)
+	}
+
+	m := map[string]interface{}{
+		"patientID":    md.Patient.PatientID,
+		"name":         md.Patient.Name,
+		"gender":       md.Patient.Gender,
+		"paced":        md.Patient.Paced,
+		"location":     md.Patient.Location,
+		"serialNumber": md.Device.SerialNumber,
+		"softwareName": md.Device.SoftwareName,
+		"modelName":    md.Device.ModelName,
+		"sampleRate":   md.Record.SampleRate,
+		"leadsCount":   len(md.Leads),
+	}
+	if !md.Patient.StartTime.IsZero() {
+		m["startTime"] = md.Patient.StartTime.Format("2006-01-02 15:04:05")
+	}
+	if !md.Patient.EndTime.IsZero() {
+		m["endTime"] = md.Patient.EndTime.Format("2006-01-02 15:04:05")
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(m)
 }
 
 func main() {

@@ -36,18 +36,24 @@ func Convert(inputPath, outputPath string) error {
 		return fmt.Errorf("building DICOM: %w", err)
 	}
 
-	// 4. Write DICOM file
-	f, err := os.Create(outputPath)
-	if err != nil {
-		return fmt.Errorf("creating output file: %w", err)
-	}
-	defer f.Close()
-
 	dicomconf.Finalize(ds)
-	if err := dicom.Write(f, *ds); err != nil {
-		return fmt.Errorf("writing DICOM: %w", err)
+
+	// 4. Write DICOM file
+
+	if outputPath != "" {
+		f, err := os.Create(outputPath)
+		if err != nil {
+			return fmt.Errorf("creating output file: %w", err)
+		}
+		defer f.Close()
+		if err := dicom.Write(f, *ds); err != nil {
+			return fmt.Errorf("writing DICOM: %w", err)
+		}
+	} else {
+		if err := dicom.Write(os.Stdout, *ds); err != nil {
+			return fmt.Errorf("writing DICOM: %w", err)
+		}
 	}
 
 	return nil
 }
-

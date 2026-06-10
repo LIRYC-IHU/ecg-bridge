@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -11,10 +12,11 @@ import (
 )
 
 var (
-	inputPath  string
-	outputPath string
-	debugMode  bool
-	anonymize  bool
+	inputPath    string
+	outputPath   string
+	debugMode    bool
+	anonymize    bool
+	metadataJSON bool
 )
 
 var rootCmd = &cobra.Command{
@@ -35,6 +37,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output DICOM file (.dcm) (default: stdout)")
 	rootCmd.Flags().BoolVarP(&debugMode, "debug", "d", false, "Print parsed fields to stderr before converting")
 	rootCmd.Flags().BoolVarP(&anonymize, "anonymize", "a", false, "Remove patient-identifying fields (name, ID, age, sex)")
+	rootCmd.Flags().BoolVar(&metadataJSON, "metadata-json", false, "Output patient metadata as JSON (no waveform)")
 
 	_ = rootCmd.MarkFlagRequired("input")
 }
@@ -43,6 +46,11 @@ func runConvert(cmd *cobra.Command, args []string) error {
 	if _, err := os.Stat(inputPath); os.IsNotExist(err) {
 		return fmt.Errorf("input file not found: %s", inputPath)
 	}
+
+	if metadataJSON {
+		return runMetadataJSON()
+	}
+
 	if !strings.HasSuffix(strings.ToLower(inputPath), ".xml") {
 		return fmt.Errorf("input must be a Philips SierraECG XML file (.xml), got: %s", inputPath)
 	}
@@ -69,6 +77,43 @@ func runConvert(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func runMetadataJSON() error {
+	d, err := philipstodicom.ParsePhilips(inputPath)
+	if err != nil {
+		return fmt.Errorf("parsing Philips XML: %w", err)
+	}
+
+	m := map[string]interface{}{
+		"patientID":    d.PatientID,
+		"patientName":  d.PatientName,
+		"gender":       d.PatientSex,
+		"age":          d.PatientAge,
+		"manufacturer": d.Manufacturer,
+		"deviceModel":  d.ModelName,
+		"softwareVer":  d.SoftwareVer,
+		"location":     d.InstitutionName,
+		"sampleRate":   d.SamplingRate,
+		"sensitivity":  d.Sensitivity,
+		"heartRate":    d.HeartRate,
+		"prInterval":   d.PRInterval,
+		"qrsDuration":  d.QRSDuration,
+		"qtInterval":   d.QTInterval,
+		"qtcInterval":  d.QTcInterval,
+		"atrialRate":   d.AtrialRate,
+		"pAxis":        d.PFrontAxis,
+		"qrsAxis":      d.QRSFrontAxis,
+		"tAxis":        d.TFrontAxis,
+		"leadsCount":   len(d.RhythmLeads),
+	}
+	if d.StudyDate != "" || d.StudyTime != "" {
+		m["datetime"] = d.StudyDate + d.StudyTime
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(m)
 }
 
 func printDebug(d *philipstodicom.PhilipsData) {

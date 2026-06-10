@@ -25,6 +25,7 @@ const (
 	secPatient2       = 0x0113
 	secRecExtendAdd   = 0x0115
 	secExerciseLoad   = 0x0200
+	secNehbRecord     = 0x0120
 )
 
 // section holds the offset and data of a PEC section.
@@ -59,6 +60,12 @@ func parseSections(dat []byte) (map[uint16]section, error) {
 		off = dataEnd + 2
 	}
 	if _, ok := sections[secRecord]; !ok {
+		// Nehb-lead recordings carry their waveform in section 0x0120 with a
+		// different layout (no RECORD/MEASUREMENT sections, no frame descriptor)
+		// and are not yet supported by this decoder.
+		if _, nehb := sections[secNehbRecord]; nehb {
+			return nil, fmt.Errorf("unsupported recording type: Nehb-lead recording (waveform in section 0x0120); standard 12-lead RECORD section (0x0008) not present")
+		}
 		return nil, fmt.Errorf("RECORD section (0x0008) not found")
 	}
 	return sections, nil
