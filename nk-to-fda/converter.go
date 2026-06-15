@@ -20,7 +20,9 @@ import (
 // If outputPath is empty, output is written to stdout.
 // When anonymize is true, direct patient identifiers are stripped from the output.
 // When meta is non-nil, its fields overwrite the parsed metadata (injection).
-func Convert(inputPath, outputPath string, anonymize bool, meta *metaject.Override) error {
+// lang selects the language for interpretive statement text ("en" or "fr",
+// defaulting to "en").
+func Convert(inputPath, outputPath string, anonymize bool, meta *metaject.Override, lang string) error {
 	dat, err := os.ReadFile(inputPath)
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", inputPath, err)
@@ -58,7 +60,7 @@ func Convert(inputPath, outputPath string, anonymize bool, meta *metaject.Overri
 
 	baseName := strings.TrimSuffix(filepath.Base(inputPath), filepath.Ext(inputPath))
 
-	xmlStr, err := buildAECG(nd, baseName)
+	xmlStr, err := buildAECG(nd, baseName, lang)
 	if err != nil {
 		return fmt.Errorf("building FDA XML: %w", err)
 	}
@@ -78,7 +80,7 @@ func newUUID() string {
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
-func buildAECG(nd *NKData, baseName string) (string, error) {
+func buildAECG(nd *NKData, baseName, lang string) (string, error) {
 	h := hl7aecg.NewHl7xml("")
 	h.Initialize(types.CPT_CODE_ECG_Routine, types.CPT_OID, "CPT-4", "")
 	h.HL7AEcg.ConfidentialityCode = nil
@@ -108,6 +110,12 @@ func buildAECG(nd *NKData, baseName string) (string, error) {
 	}
 	if nd.Patient.BirthDate == "" {
 		sdp.BirthTime = nil
+	}
+	if nd.Patient.Age != "" {
+		sdp.SetAge(nd.Patient.Age)
+	}
+	for _, med := range nd.Patient.Medications {
+		sdp.AddMedication(med)
 	}
 
 	// ClinicalTrial
@@ -155,7 +163,7 @@ func buildAECG(nd *NKData, baseName string) (string, error) {
 		}
 
 		// Annotations
-		addAnnotations(h, nd, startDT)
+		addAnnotations(h, nd, startDT, lang)
 	}
 
 	vctx := types.NewValidationContext(false)
@@ -173,12 +181,37 @@ func buildAECG(nd *NKData, baseName string) (string, error) {
 	return stdxml.Header + string(data), nil
 }
 
-func addAnnotations(h *hl7aecg.Hl7xml, nd *NKData, studyDT string) {
+func addAnnotations(h *hl7aecg.Hl7xml, nd *NKData, studyDT, lang string) {
 	if len(h.HL7AEcg.Component) == 0 {
 		return
 	}
 	series := &h.HL7AEcg.Component[len(h.HL7AEcg.Component)-1].Series
 	annSet := series.InitAnnotationSet(studyDT)
+
+	// Interpretive ECG statements, resolved to text in the requested language.
+	for _, st := range nd.Statements {
+		txt := statementText(lang, st.Code)
+		if txt == "" {
+			continue
+		}
+		annSet.AddTextAnnotation(st.Code, statementCodeSystem, txt)
+	}
+
+	// Clinical context fields, emitted as LOINC-coded text annotations.
+	loinc := string(types.LOINC_OID)
+	p := nd.Patient
+	if p.Height != "" {
+		annSet.AddTextAnnotation("8302-2", loinc, p.Height+" cm")
+	}
+	if p.Weight != "" {
+		annSet.AddTextAnnotation("29463-7", loinc, p.Weight+" kg")
+	}
+	if p.History != "" {
+		annSet.AddTextAnnotation("11348-0", loinc, p.History)
+	}
+	if p.Symptoms != "" {
+		annSet.AddTextAnnotation("11455-3", loinc, p.Symptoms)
+	}
 
 	m := nd.Measurement
 	if m.HeartRate > 0 {

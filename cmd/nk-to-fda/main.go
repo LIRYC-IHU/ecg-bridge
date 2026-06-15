@@ -17,6 +17,7 @@ var (
 	debugMode    bool
 	metadataJSON bool
 	anonymize    bool
+	lang         string
 )
 
 var rootCmd = &cobra.Command{
@@ -45,6 +46,7 @@ func init() {
 	rootCmd.Flags().BoolVarP(&debugMode, "debug", "d", false, "Print parsed metadata to stderr")
 	rootCmd.Flags().BoolVar(&metadataJSON, "metadata-json", false, "Output patient metadata as JSON (no waveform decoding)")
 	rootCmd.Flags().BoolVarP(&anonymize, "anonymize", "a", false, "Strip patient-identifying fields (name, ID, birth date) from the output")
+	rootCmd.Flags().StringVarP(&lang, "lang", "l", "en", "Language for interpretive statement text: en or fr")
 
 	_ = rootCmd.MarkFlagRequired("input")
 }
@@ -73,7 +75,7 @@ func runConvert(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("reading injection metadata from stdin: %w", err)
 	}
 
-	if err := nktofda.Convert(inputPath, outputPath, anonymize, meta); err != nil {
+	if err := nktofda.Convert(inputPath, outputPath, anonymize, meta, lang); err != nil {
 		return fmt.Errorf("conversion failed: %w", err)
 	}
 
@@ -101,6 +103,12 @@ func runMetadataJSON() error {
 		"birthDate":    nd.Patient.BirthDate,
 		"location":     nd.Patient.Location,
 		"deviceModel":  nd.Patient.DeviceModel,
+		"age":          nd.Patient.Age,
+		"height":       nd.Patient.Height,
+		"weight":       nd.Patient.Weight,
+		"medications":  nd.Patient.Medications,
+		"history":      nd.Patient.History,
+		"symptoms":     nd.Patient.Symptoms,
 		"heartRate":    nd.Measurement.HeartRate,
 		"prInterval":   nd.Measurement.PRInterval,
 		"qrsDuration":  nd.Measurement.QRSDuration,
