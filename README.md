@@ -90,6 +90,11 @@ converter-fda/
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/fda-to-dicom@latest
 ```
 
+- `fda-to-pdf` 
+```bash
+go install github.com/LIRYC-IHU/ecg-bridge/cmd/fda-to-pdf@latest
+```
+
 - `mindray-to-dicom` 
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/mindray-to-dicom@latest
@@ -98,6 +103,11 @@ go install github.com/LIRYC-IHU/ecg-bridge/cmd/mindray-to-dicom@latest
 - `mindray-to-fda` 
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/mindray-to-fda@latest
+```
+
+- `mindray-to-pdf` 
+```bash
+go install github.com/LIRYC-IHU/ecg-bridge/cmd/mindray-to-pdf@latest
 ```
 
 - `muse-to-dicom` 
@@ -110,6 +120,11 @@ go install github.com/LIRYC-IHU/ecg-bridge/cmd/muse-to-dicom@latest
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/muse-to-fda@latest
 ```
 
+- `muse-to-pdf` 
+```bash
+go install github.com/LIRYC-IHU/ecg-bridge/cmd/muse-to-pdf@latest
+```
+
 - `nk-to-dicom` 
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/nk-to-dicom@latest
@@ -120,6 +135,11 @@ go install github.com/LIRYC-IHU/ecg-bridge/cmd/nk-to-dicom@latest
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/nk-to-fda@latest
 ```
 
+- `nk-to-pdf` 
+```bash
+go install github.com/LIRYC-IHU/ecg-bridge/cmd/nk-to-pdf@latest
+```
+
 - `philips-to-dicom` 
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/philips-to-dicom@latest
@@ -128,6 +148,11 @@ go install github.com/LIRYC-IHU/ecg-bridge/cmd/philips-to-dicom@latest
 - `philips-to-fda` 
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/philips-to-fda@latest
+```
+
+- `philips-to-pdf` 
+```bash
+go install github.com/LIRYC-IHU/ecg-bridge/cmd/philips-to-pdf@latest
 ```
 
 <!-- CLI_TOOLS_END -->
