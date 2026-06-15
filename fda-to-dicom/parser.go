@@ -57,6 +57,11 @@ type FDAData struct {
 	Baseline     float64            // origin
 	Leads        map[string][]int16 // ORIGINAL (rhythm)
 	RepBeats     map[string][]int16 // DERIVED (representative beat)
+
+	// ECG interpretation (from the MDC_ECG_INTERPRETATION annotation block)
+	InterpretationSummary    string   // overall banner (e.g. "- ECG NORMAL -")
+	InterpretationComment    string   // free comment (e.g. "Unconfirmed Diagnosis")
+	InterpretationStatements []string // specific findings, in document order
 }
 
 // Anonymize blanks the direct patient identifiers (name, ID, birth date)
@@ -419,6 +424,8 @@ func extractMeasurement(d *FDAData, ann *types.Annotation) {
 	val, hasVal := ann.GetValueFloat()
 
 	switch code {
+	case "MDC_ECG_INTERPRETATION":
+		extractInterpretation(d, ann)
 	case "MDC_ECG_HEART_RATE":
 		if hasVal {
 			d.HeartRate = val
@@ -446,6 +453,48 @@ func extractMeasurement(d *FDAData, ann *types.Annotation) {
 					d.QTcInterval = v
 				}
 			}
+		}
+	case "MDC_ECG_ANGLE_P_FRONT":
+		if hasVal {
+			d.PFrontAxis = val
+		}
+	case "MDC_ECG_ANGLE_QRS_FRONT":
+		if hasVal {
+			d.QRSFrontAxis = val
+		}
+	case "MDC_ECG_ANGLE_T_FRONT":
+		if hasVal {
+			d.TFrontAxis = val
+		}
+	case "MDC_ECG_ATRIAL_RATE":
+		if hasVal {
+			d.AtrialRate = val
+		}
+	}
+}
+
+// extractInterpretation reads the nested text annotations of an
+// MDC_ECG_INTERPRETATION block (summary, comment, statements) into d.
+func extractInterpretation(d *FDAData, ann *types.Annotation) {
+	for i := range ann.Component {
+		nested := &ann.Component[i].Annotation
+		if nested.Code == nil || nested.Value == nil {
+			continue
+		}
+		txt, ok := nested.Value.GetText()
+		if !ok {
+			continue
+		}
+		if txt = strings.TrimSpace(txt); txt == "" {
+			continue
+		}
+		switch string(nested.Code.Code) {
+		case "MDC_ECG_INTERPRETATION_STATEMENT":
+			d.InterpretationStatements = append(d.InterpretationStatements, txt)
+		case "MDC_ECG_INTERPRETATION_SUMMARY":
+			d.InterpretationSummary = txt
+		case "MDC_ECG_INTERPRETATION_COMMENT":
+			d.InterpretationComment = txt
 		}
 	}
 }
