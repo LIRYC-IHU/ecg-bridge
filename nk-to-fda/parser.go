@@ -146,6 +146,22 @@ func parsePatient(secs map[uint16]section) PatientData {
 			pd.FamilyName = readNullStr(d[0x00:0x20])
 			pd.GivenName = readNullStr(d[0x20:0x3E])
 			pd.PatientID = readSpaceStr(d[0x3E : 0x3E+9])
+			// Birth date: 2-byte BE year, 1-byte month, 1-byte day at 0x54
+			// (sits just before the age field at 0x59).
+			if len(d) >= 0x58 {
+				by := int(binary.BigEndian.Uint16(d[0x54:0x56]))
+				bm := int(d[0x56])
+				bd := int(d[0x57])
+				if by > 1800 && by < 2200 && bm >= 1 && bm <= 12 && bd >= 1 && bd <= 31 {
+					pd.BirthDate = fmt.Sprintf("%04d%02d%02d", by, bm, bd)
+				}
+			}
+			// Referring physician, operator and department/service are three
+			// fixed-width ASCII fields preceding the location. The department
+			// label carries a leading numeric ward code ("404ihu liryc").
+			pd.Physician = readFieldText(d, 0xE1, 0xF6)
+			pd.Operator = readFieldText(d, 0xF6, 0x10B)
+			pd.Department = stripDeptCode(readFieldText(d, 0x10B, 0x143))
 			if len(d) >= 0x160 {
 				pd.Location = readNullStr(d[0x143:0x160])
 			}
@@ -333,6 +349,17 @@ func readFieldText(d []byte, start, end int) string {
 		}
 	}
 	return strings.TrimSpace(string(b))
+}
+
+// stripDeptCode removes a leading numeric ward/department code from a service
+// label (e.g. "404ihu liryc" -> "ihu liryc"). A label with no leading digits
+// is returned unchanged.
+func stripDeptCode(s string) string {
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	return strings.TrimSpace(s[i:])
 }
 
 // readSpaceStr reads space-terminated ASCII string.

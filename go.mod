@@ -10,6 +10,7 @@ require (
 
 require (
 	github.com/ECUST-XX/xml v1.20.2 // indirect
+	github.com/go-pdf/fpdf v0.9.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	golang.org/x/exp v0.0.0-20240525044651-4c93da0ed11d // indirect

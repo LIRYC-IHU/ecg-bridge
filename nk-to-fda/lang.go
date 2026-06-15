@@ -52,6 +52,14 @@ func statementText(lang, code string) string {
 	return tbl[code]
 }
 
+// StatementText resolves a statement code to its human-readable text in the
+// given language ("en" or "fr"). Returns "" when the code is unknown. It is the
+// exported wrapper around statementText, used by external renderers such as the
+// PDF prototype.
+func StatementText(lang, code string) string {
+	return statementText(lang, code)
+}
+
 // parseLangTable decodes a UTF-16LE vocabulary file into a code→text map.
 //
 // File format: a leading entry-count line, then one entry per line as

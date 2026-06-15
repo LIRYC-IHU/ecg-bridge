@@ -72,7 +72,10 @@ type PatientData struct {
 	FamilyName  string
 	GivenName   string
 	PatientID   string
-	Location    string    // hospital ward/department
+	Location    string    // exam location/consult (e.g. "ID4 Consult CARDIO")
+	Department  string    // hospital/department name, code stripped (e.g. "ihu liryc")
+	Operator    string    // technician who acquired the ECG (e.g. "operateur")
+	Physician   string    // referring/ordering physician (e.g. "dr test")
 	RecordingAt time.Time // datetime from PATIENT section
 	Gender      string    // "M", "F", "U", ""
 	BirthDate   string    // YYYYMMDD if known, else ""
