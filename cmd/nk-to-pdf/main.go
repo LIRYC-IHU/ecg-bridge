@@ -1,34 +1,31 @@
-// Command nk-to-pdf is a PROTOTYPE: it converts a Nihon Kohden .DAT (PEC)
-// recording into a printable 12-lead ECG PDF report that mimics the NK paper
-// output. Unlike a scanned image, every metadata field is real selectable text
-// and the waveforms are vector polylines on a millimetric (red graph-paper)
-// grid.
+// Command nk-to-pdf converts a Nihon Kohden .DAT (PEC) recording into a
+// printable 12-lead ECG PDF report (NK paper style). Every metadata field is
+// real selectable text and the waveforms are vector polylines on a millimetric
+// grid, so the output zooms cleanly. Rendering is shared with the other vendor
+// PDF tools via the converter-fda/ecgpdf package.
 //
-// This lives under proto/ on purpose — it is a throwaway/experimental tool we
-// will refine once the basic PDF output looks right.
-//
-//	go run ./proto/nk-to-pdf -i input.DAT -o out.pdf
+//	nk-to-pdf -i input.DAT -o out.pdf          # write a file
+//	nk-to-pdf -i input.DAT | base64 -d > x.pdf # base64 on stdout
 package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
+	"converter-fda/ecgpdf"
 	nktofda "converter-fda/nk-to-fda"
 )
 
 func main() {
-	var (
-		in   string
-		out  string
-		lang string
-	)
+	var in, out, lang string
+	var forms bool
 	flag.StringVar(&in, "i", "", "input NK .DAT file (required)")
 	flag.StringVar(&out, "o", "", "output PDF path; if omitted, prints the base64-encoded PDF to stdout")
-	flag.StringVar(&lang, "l", "fr", "interpretive statement language: en or fr")
+	flag.StringVar(&lang, "l", "en", "interpretive statement language: en or fr")
+	flag.BoolVar(&forms, "forms", true, "render patient/measurement values as fillable AcroForm fields")
 	flag.Parse()
 
 	if in == "" {
@@ -41,41 +38,86 @@ func main() {
 	if err != nil {
 		fail("reading input: %v", err)
 	}
-
 	nd, err := nktofda.ParseFile(dat)
 	if err != nil {
 		fail("parsing NK file: %v", err)
 	}
-
 	leads, err := nktofda.DecodeWaveforms(dat, nd.Record.TotalSamples)
 	if err != nil {
 		fail("decoding waveforms: %v", err)
 	}
 	nd.Leads = leads
 
+	rep := buildReport(nd, lang)
+	rep.Forms = forms
+
 	var buf bytes.Buffer
-	if err := renderPDF(nd, lang, &buf); err != nil {
+	if err := ecgpdf.Render(rep, lang, &buf); err != nil {
 		fail("rendering PDF: %v", err)
 	}
+	if err := ecgpdf.Output(buf.Bytes(), out); err != nil {
+		fail("writing output: %v", err)
+	}
+	if out != "" {
+		fmt.Fprintf(os.Stderr, "Wrote %s\n", out)
+	}
+}
 
-	if out == "" {
-		// No -o: emit the raw PDF as base64 on stdout so external tools can
-		// recover the original bytes (e.g. `... | base64 -d > ecg.pdf`).
-		enc := base64.NewEncoder(base64.StdEncoding, os.Stdout)
-		if _, err := enc.Write(buf.Bytes()); err != nil {
-			fail("writing base64 output: %v", err)
-		}
-		if err := enc.Close(); err != nil {
-			fail("flushing base64 output: %v", err)
-		}
-		fmt.Fprintln(os.Stdout)
-		return
+// buildReport maps NK-specific data into the vendor-neutral ecgpdf.Report,
+// deriving the 4 augmented leads and resolving statement codes to text.
+func buildReport(nd *nktofda.NKData, lang string) *ecgpdf.Report {
+	p, m := nd.Patient, nd.Measurement
+
+	i, ii := nd.Leads["I"], nd.Leads["II"]
+	iii, avr, avl, avf := nktofda.DeriveLeads(i, ii)
+	leadMap := map[string][]int32{
+		"I": i, "II": ii, "III": iii, "aVR": avr, "aVL": avl, "aVF": avf,
+		"V1": nd.Leads["V1"], "V2": nd.Leads["V2"], "V3": nd.Leads["V3"],
+		"V4": nd.Leads["V4"], "V5": nd.Leads["V5"], "V6": nd.Leads["V6"],
 	}
 
-	if err := os.WriteFile(out, buf.Bytes(), 0o644); err != nil {
-		fail("writing %s: %v", out, err)
+	var sts []ecgpdf.Statement
+	for _, s := range nd.Statements {
+		txt := nktofda.StatementText(lang, s.Code)
+		if txt == "" {
+			continue
+		}
+		sts = append(sts, ecgpdf.Statement{Code: s.Code, Text: txt, Emphasis: s.Overall})
 	}
-	fmt.Fprintf(os.Stderr, "Wrote %s\n", out)
+
+	return &ecgpdf.Report{
+		PatientID:      p.PatientID,
+		Name:           strings.TrimSpace(p.FamilyName + " " + p.GivenName),
+		Sex:            p.Gender,
+		BirthDate:      p.BirthDate,
+		Age:            p.Age,
+		Height:         p.Height,
+		Weight:         p.Weight,
+		Medications:    p.Medications,
+		History:        p.History,
+		Symptoms:       p.Symptoms,
+		DeviceModel:    p.DeviceModel,
+		Department:     p.Department,
+		Operator:       p.Operator,
+		Location:       p.Location,
+		RecordingAt:    p.RecordingAt,
+		HeartRate:      m.HeartRate,
+		PRInterval:     m.PRInterval,
+		QRSDuration:    m.QRSDuration,
+		QTInterval:     m.QTInterval,
+		QTcInterval:    m.QTcInterval,
+		PAxis:          m.PAxis,
+		QRSAxis:        m.QRSAxis,
+		TAxis:          m.TAxis,
+		ShowAmplitudes: true,
+		V5RAmplitude:   m.V5RAmplitude,
+		V1SAmplitude:   m.V1SAmplitude,
+		Filter:         "H50–150 Hz",
+		SampleRate:     float64(nd.Record.SampleRate),
+		ScaleUV:        nd.Record.Scale,
+		Leads:          leadMap,
+		Statements:     sts,
+	}
 }
 
 func fail(format string, a ...any) {
