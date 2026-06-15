@@ -12,7 +12,14 @@ type NKData struct {
 	Patient     PatientData
 	Measurement MeasurementData
 	Record      RecordParams
+	Statements  []Statement        // interpretive ECG statements, in file order
 	Leads       map[string][]int32 // 8 measured leads: I, II, V1-V6
+}
+
+// Statement is one interpretive ECG finding.
+type Statement struct {
+	Code    string // 4-digit decimal statement code
+	Overall bool   // true for the overall assessment banner, false for a specific finding
 }
 
 // Anonymize blanks the direct patient identifiers (name, ID, birth date)
@@ -70,6 +77,14 @@ type PatientData struct {
 	Gender      string    // "M", "F", "U", ""
 	BirthDate   string    // YYYYMMDD if known, else ""
 	DeviceModel string    // from SYSTEM section (e.g. "2350K")
+
+	// Clinical context entered at acquisition (free text, may be empty).
+	Age         string   // age in years
+	Height      string   // height in cm
+	Weight      string   // weight in kg
+	Medications []string // current medications
+	History     string   // clinical history
+	Symptoms    string   // presenting symptoms
 }
 
 // MeasurementData holds analytical ECG measurements from MEASUREMENT section.

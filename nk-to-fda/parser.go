@@ -82,7 +82,54 @@ func ParseFile(dat []byte) (*NKData, error) {
 	nd.Patient = parsePatient(secs)
 	nd.Measurement = parseMeasurement(secs)
 	nd.Record = parseRecord(secs)
+	nd.Statements = parseStatements(secs)
 	return nd, nil
+}
+
+// statementListOffset is where the interpretive statement list begins inside
+// the MEASUREMENT section data, right after a 2-byte algorithm-version field.
+const statementListOffset = 0x5e
+
+// parseStatements reads the interpretive ECG statement list from the
+// MEASUREMENT section.
+//
+// The list is a run of 4-byte records: [kind:1][code:2 BCD][0xFF]. kind 0x01
+// marks the overall assessment banner, 0x02 a specific finding. Each code is
+// two BCD bytes (one decimal digit per nibble). The list ends at the first
+// record whose kind byte is neither 0x01 nor 0x02.
+func parseStatements(secs map[uint16]section) []Statement {
+	s, ok := secs[secMeasurement]
+	if !ok {
+		return nil
+	}
+	d := s.data
+	var out []Statement
+	for off := statementListOffset; off+4 <= len(d); off += 4 {
+		kind := d[off]
+		if kind != 0x01 && kind != 0x02 {
+			break
+		}
+		if d[off+3] != 0xFF {
+			break
+		}
+		code, ok := bcd2(d[off+1], d[off+2])
+		if !ok {
+			break
+		}
+		out = append(out, Statement{Code: code, Overall: kind == 0x01})
+	}
+	return out
+}
+
+// bcd2 decodes two binary-coded-decimal bytes into a 4-digit string. It reports
+// false if any nibble is not a decimal digit.
+func bcd2(hi, lo byte) (string, bool) {
+	for _, n := range []byte{hi >> 4, hi & 0x0F, lo >> 4, lo & 0x0F} {
+		if n > 9 {
+			return "", false
+		}
+	}
+	return fmt.Sprintf("%d%d%d%d", hi>>4, hi&0x0F, lo>>4, lo&0x0F), true
 }
 
 // parsePatient extracts demographic data.
@@ -105,6 +152,18 @@ func parsePatient(secs map[uint16]section) PatientData {
 			if len(d) >= 0x173 {
 				pd.RecordingAt = parseDatetime(d[0x16C:0x173])
 			}
+			// Clinical context fields (fixed offsets, ASCII, NUL/0xFF delimited).
+			pd.Age = readFieldText(d, 0x59, 0x5E)
+			pd.Height = readFieldText(d, 0x5F, 0x64)
+			pd.Weight = readFieldText(d, 0x64, 0x6D)
+			if m1 := readFieldText(d, 0x6F, 0x86); m1 != "" {
+				pd.Medications = append(pd.Medications, m1)
+			}
+			if m2 := readFieldText(d, 0x87, 0x9E); m2 != "" {
+				pd.Medications = append(pd.Medications, m2)
+			}
+			pd.History = readFieldText(d, 0x9E, 0xB5)
+			pd.Symptoms = readFieldText(d, 0xB5, 0xD0)
 		}
 	}
 
@@ -258,6 +317,22 @@ func readNullStr(b []byte) string {
 		}
 	}
 	return strings.TrimSpace(string(b[:end]))
+}
+
+// readFieldText reads an ASCII field in [start, end), stopping at the first NUL
+// or 0xFF delimiter. Returns "" if the range is out of bounds.
+func readFieldText(d []byte, start, end int) string {
+	if start >= end || end > len(d) {
+		return ""
+	}
+	b := d[start:end]
+	for i, c := range b {
+		if c == 0x00 || c == 0xFF {
+			b = b[:i]
+			break
+		}
+	}
+	return strings.TrimSpace(string(b))
 }
 
 // readSpaceStr reads space-terminated ASCII string.
