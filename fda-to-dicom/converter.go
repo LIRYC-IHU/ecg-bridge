@@ -12,6 +12,8 @@ import (
 )
 
 // Convert reads an FDA aECG XML file and writes a DICOM ECG file.
+// If outputPath is empty, the DICOM bytes are written to stdout (matching the
+// other *-to-dicom converters so the ECGBridge can read the result from stdout).
 // When anonymize is true, direct patient identifiers are stripped from the output.
 // When meta is non-nil, its fields overwrite the parsed metadata (injection).
 func Convert(inputPath, outputPath string, anonymize bool, meta *metaject.Override) error {
@@ -30,9 +32,14 @@ func Convert(inputPath, outputPath string, anonymize bool, meta *metaject.Overri
 		return fmt.Errorf("building DICOM: %w", err)
 	}
 
-	f, err := os.Create(outputPath)
-	if err != nil {
-		return fmt.Errorf("creating output file: %w", err)
+	var f *os.File
+	if outputPath == "" {
+		f = os.Stdout
+	} else {
+		f, err = os.Create(outputPath)
+		if err != nil {
+			return fmt.Errorf("creating output file: %w", err)
+		}
 	}
 	defer f.Close()
 

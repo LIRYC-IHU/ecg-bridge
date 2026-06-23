@@ -93,6 +93,7 @@ func buildReport(nd *nktofda.NKData, lang string) *ecgpdf.Report {
 		Age:            p.Age,
 		Height:         p.Height,
 		Weight:         p.Weight,
+		BloodPressure:  strings.Join(strings.Fields(p.BloodPressure), "/"),
 		Medications:    p.Medications,
 		History:        p.History,
 		Symptoms:       p.Symptoms,

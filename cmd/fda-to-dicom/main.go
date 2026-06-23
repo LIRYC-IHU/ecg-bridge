@@ -41,7 +41,7 @@ Inject metadata (JSON on stdin):
 
 func init() {
 	rootCmd.Flags().StringVarP(&inputPath, "input", "i", "", "Path to FDA aECG XML file (required)")
-	rootCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output DICOM file (.dcm) (required)")
+	rootCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output DICOM file (.dcm) (optional, defaults to stdout)")
 	rootCmd.Flags().BoolVarP(&debugMode, "debug", "d", false, "Print parsed fields to stderr before converting")
 	rootCmd.Flags().BoolVar(&metadataJSON, "metadata-json", false, "Output patient metadata as JSON (no waveform)")
 	rootCmd.Flags().BoolVarP(&anonymize, "anonymize", "a", false, "Strip patient-identifying fields (name, ID, birth date) from the output")
@@ -61,17 +61,18 @@ func runConvert(cmd *cobra.Command, args []string) error {
 		return runMetadataJSON()
 	}
 
-	if outputPath == "" {
-		return fmt.Errorf("output is required (use --output file.dcm)")
-	}
-	if !strings.HasSuffix(strings.ToLower(outputPath), ".dcm") {
+	if outputPath != "" && !strings.HasSuffix(strings.ToLower(outputPath), ".dcm") {
 		return fmt.Errorf("output must be a DICOM file (.dcm), got: %s", outputPath)
 	}
 	if err := fdatodicom.ValidateFDAInput(inputPath); err != nil {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "Converting %s → %s\n", inputPath, outputPath)
+	dest := outputPath
+	if dest == "" {
+		dest = "stdout"
+	}
+	fmt.Fprintf(os.Stderr, "Converting %s → %s\n", inputPath, dest)
 
 	if debugMode {
 		data, err := fdatodicom.ParseFDA(inputPath)
@@ -90,7 +91,9 @@ func runConvert(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("conversion failed: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Done. Output written to %s\n", outputPath)
+	if outputPath != "" {
+		fmt.Fprintf(os.Stderr, "Done. Output written to %s\n", outputPath)
+	}
 	return nil
 }
 

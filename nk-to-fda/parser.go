@@ -171,7 +171,8 @@ func parsePatient(secs map[uint16]section) PatientData {
 			// Clinical context fields (fixed offsets, ASCII, NUL/0xFF delimited).
 			pd.Age = readFieldText(d, 0x59, 0x5E)
 			pd.Height = readFieldText(d, 0x5F, 0x64)
-			pd.Weight = readFieldText(d, 0x64, 0x6D)
+			pd.Weight = readFieldText(d, 0x64, 0x68)
+			pd.BloodPressure = readFieldText(d, 0x68, 0x6D)
 			if m1 := readFieldText(d, 0x6F, 0x86); m1 != "" {
 				pd.Medications = append(pd.Medications, m1)
 			}

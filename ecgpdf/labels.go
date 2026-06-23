@@ -18,7 +18,7 @@ type labels struct {
 var labelsFR = labels{
 	id: "ID:", name: "Nom:", sex: "Sexe:", dob: "Date naiss:",
 	ageSuffix: " ans", cmSuffix: " cm", kgSuffix: " kg", bp: "____ mmHg",
-	meds: "Medicament:", symptoms: "Symptomes:", history: "Historiqu:",
+	meds: "Medicament:", symptoms: "Symptomes:", history: "Historique:",
 	hr: "Frequence ventriculaire:", prInt: "intervalle PR:", qrsDur: "duree QRS:",
 	qtQtc: "int. QT/QTc:", axis: "axe P/QRS/T:",
 	amplDiv: "ampl. RV5/SV1:", amplSum: "ampl. RV5+SV1:",

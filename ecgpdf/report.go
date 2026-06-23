@@ -18,13 +18,14 @@ type Statement struct {
 // Report is the vendor-neutral input to Render.
 type Report struct {
 	// Identity
-	PatientID string
-	Name      string // display name, e.g. "DOE John"
-	Sex       string
-	BirthDate string // YYYYMMDD or ""
-	Age       string // free text, e.g. "35"
-	Height    string // cm, free text
-	Weight    string // kg, free text
+	PatientID     string
+	Name          string // display name, e.g. "DOE John"
+	Sex           string
+	BirthDate     string // YYYYMMDD or ""
+	Age           string // free text, e.g. "35"
+	Height        string // cm, free text
+	Weight        string // kg, free text
+	BloodPressure string // "systolic/diastolic" in mmHg, free text
 
 	// Clinical context (free text, may be empty)
 	Medications []string

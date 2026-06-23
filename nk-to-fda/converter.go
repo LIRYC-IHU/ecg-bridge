@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -111,9 +112,6 @@ func buildAECG(nd *NKData, baseName, lang string) (string, error) {
 	if nd.Patient.BirthDate == "" {
 		sdp.BirthTime = nil
 	}
-	if nd.Patient.Age != "" {
-		sdp.SetAge(nd.Patient.Age)
-	}
 	for _, med := range nd.Patient.Medications {
 		sdp.AddMedication(med)
 	}
@@ -197,21 +195,22 @@ func addAnnotations(h *hl7aecg.Hl7xml, nd *NKData, studyDT, lang string) {
 		annSet.AddTextAnnotation(st.Code, statementCodeSystem, txt)
 	}
 
-	// Clinical context fields, emitted as LOINC-coded text annotations.
+	// Clinical context fields, emitted as LOINC-coded annotations.
 	loinc := string(types.LOINC_OID)
 	p := nd.Patient
-	if p.Height != "" {
-		annSet.AddTextAnnotation("8302-2", loinc, p.Height+" cm")
+	// Numeric vitals as physical quantities (PQ).
+	addPQ(annSet, "21612-7", "Reported Age", loinc, "a", p.Age)
+	addPQ(annSet, "8308-9", "Height", loinc, "cm", p.Height)
+	addPQ(annSet, "8335-2", "Weight", loinc, "kg", p.Weight)
+	if p.BloodPressure != "" {
+		if parts := strings.FieldsFunc(p.BloodPressure, func(r rune) bool { return r == ' ' || r == '/' }); len(parts) == 2 {
+			addPQ(annSet, "8557-1", "Blood Pressure Systolic", loinc, "mmHg", parts[0])
+			addPQ(annSet, "8522-5", "Blood Pressure Diastolic", loinc, "mmHg", parts[1])
+		}
 	}
-	if p.Weight != "" {
-		annSet.AddTextAnnotation("29463-7", loinc, p.Weight+" kg")
-	}
-	if p.History != "" {
-		annSet.AddTextAnnotation("11348-0", loinc, p.History)
-	}
-	if p.Symptoms != "" {
-		annSet.AddTextAnnotation("11455-3", loinc, p.Symptoms)
-	}
+	// Free-text clinical context as encapsulated data (ED).
+	addClinicalED(annSet, "11348-0", "History of Past illness", loinc, p.History)
+	addClinicalED(annSet, "29546-9", "Symptom", loinc, p.Symptoms)
 
 	m := nd.Measurement
 	if m.HeartRate > 0 {
@@ -237,6 +236,40 @@ func addAnnotations(h *hl7aecg.Hl7xml, nd *NKData, studyDT, lang string) {
 	}
 	if m.HasTAxis {
 		annSet.AddAnnotation(string(types.MDC_ECG_ANGLE_T_FRONT), string(types.MDC_OID), float64(m.TAxis), "deg")
+	}
+}
+
+// addPQ appends a numeric clinical value (age, height, weight, blood pressure,
+// ...) as a LOINC-coded physical-quantity annotation. Empty or non-numeric
+// readings are skipped so a malformed field never produces an invalid value.
+func addPQ(as *types.AnnotationSet, code, display, codeSystem, unit, reading string) {
+	v, err := strconv.ParseFloat(strings.TrimSpace(reading), 64)
+	if err != nil {
+		return
+	}
+	i := as.AddAnnotation(code, codeSystem, v, unit)
+	if i < 0 {
+		return
+	}
+	if c := as.Component[i].Annotation.Code; c != nil {
+		c.CodeSystemName = "LOINC"
+		c.DisplayName = display
+	}
+}
+
+// addClinicalED appends a free-text clinical field (history, symptoms, ...) as a
+// LOINC-coded encapsulated-data (ED) annotation. Empty fields are skipped.
+func addClinicalED(as *types.AnnotationSet, code, display, codeSystem, text string) {
+	if text == "" {
+		return
+	}
+	i := as.AddEDAnnotation(code, codeSystem, text)
+	if i < 0 {
+		return
+	}
+	if c := as.Component[i].Annotation.Code; c != nil {
+		c.CodeSystemName = "LOINC"
+		c.DisplayName = display
 	}
 }
 

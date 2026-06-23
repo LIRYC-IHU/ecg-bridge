@@ -99,9 +99,9 @@ func Render(r *Report, lang string, w io.Writer) error {
 	tr := pdf.UnicodeTranslatorFromDescriptor("") // cp1252 for accented French
 
 	drawPatientBlock(pdf, tr, r)
-	yStmt := drawStatements(pdf, tr, r)
-	drawPhysicianBlock(pdf, tr, yStmt+3)
+	drawStatements(pdf, tr, r)
 	drawMeasurements(pdf, tr, r)
+	drawPhysicianBlock(pdf, tr)
 	drawScaleNote(pdf, tr, r)
 
 	drawGrid(pdf, gridX, gridTop, gridW, 3*rowH+rhythmH)
@@ -217,7 +217,7 @@ func drawPatientBlock(pdf *fpdf.Fpdf, tr func(string) string, r *Report) {
 	y += lh
 	numUnit("height", margin, y, 16, r.Height, strings.TrimSpace(lbl.cmSuffix))
 	numUnit("weight", 40, y, 16, r.Weight, strings.TrimSpace(lbl.kgSuffix))
-	numUnit("bp", 70, y, 16, "", "mmHg")
+	numUnit("bp", 70, y, 16, r.BloodPressure, "mmHg")
 	y += lh
 	labelVal("meds", margin, y, lbl.meds, strings.Join(r.Medications, ", "), 195)
 	y += lh
@@ -254,39 +254,37 @@ func drawStatements(pdf *fpdf.Fpdf, tr func(string) string, r *Report) float64 {
 	return y
 }
 
-// drawPhysicianBlock draws a "physician diagnosis" area below the interpretive
-// statements (right column): a bordered free-text zone — an editable multiline
-// field when forms are on — plus a Physician/Date signature line.
-func drawPhysicianBlock(pdf *fpdf.Fpdf, tr func(string) string, yStart float64) {
+// drawPhysicianBlock draws a wide "physician diagnosis" area to the right of the
+// measurements, starting on the Ventricular-rate line: a bordered free-text zone
+// (an editable multiline field when forms are on) plus a Physician/Date line.
+func drawPhysicianBlock(pdf *fpdf.Fpdf, tr func(string) string) {
 	const (
-		lh         = 4.4
-		areaBottom = 57.0 // keep clear of the signals/scale note below
-		sigY       = 60.0
+		lh        = 4.4
+		x         = 98.0 // ~one tab right of the measurements' unit column
+		yLabel    = 40.0 // same line as "Ventricular rate"
+		boxTop    = 45.0
+		boxBottom = 63.0
+		sigY      = 64.5
 	)
-	x := rightX
-	wBlock := 297.0 - margin - rightX // right column width
+	wBlock := 297.0 - margin - x // run to the right page margin
 
 	pdf.SetTextColor(0, 0, 0)
 	pdf.SetFont("Helvetica", "B", 8.5)
-	pdf.SetXY(x, yStart)
+	pdf.SetXY(x, yLabel)
 	pdf.Write(lh, tr(lbl.diag))
 
-	areaTop := yStart + lh + 0.5
-	if areaTop > areaBottom-10 {
-		areaTop = areaBottom - 10 // guarantee a minimum writing height
-	}
 	pdf.SetDrawColor(150, 150, 150)
 	pdf.SetLineWidth(0.2)
-	pdf.Rect(x, areaTop, wBlock, areaBottom-areaTop, "D")
+	pdf.Rect(x, boxTop, wBlock, boxBottom-boxTop, "D")
 	if formsEnabled {
-		regFieldML("diag", x+0.5, areaTop+0.5, wBlock-1, areaBottom-areaTop-1)
+		regFieldML("diag", x+0.5, boxTop+0.5, wBlock-1, boxBottom-boxTop-1)
 	}
 
 	// Signature line: Physician: [____]   Date: [____]
 	pdf.SetFont("Helvetica", "", 8)
 	pdf.SetXY(x, sigY)
 	pdf.Write(lh, tr(lbl.physician+" "))
-	dateLabelX := x + wBlock - 30
+	dateLabelX := x + wBlock - 45
 	if formsEnabled {
 		pw := pdf.GetStringWidth(tr(lbl.physician + " "))
 		regField("md_physician", x+pw, sigY, dateLabelX-(x+pw)-2, lh, "", "left")
