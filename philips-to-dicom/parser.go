@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"converter-fda/metaject"
+	"github.com/LIRYC-IHU/ecg-bridge/metaject"
 )
 
 // PhilipsData is the unified model extracted from a Philips SierraECG XML file.

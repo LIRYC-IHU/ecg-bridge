@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"converter-fda/metaject"
-	mindraytofda "converter-fda/mindray-to-fda"
+	"github.com/LIRYC-IHU/ecg-bridge/metaject"
+	mindraytofda "github.com/LIRYC-IHU/ecg-bridge/mindray-to-fda"
 
 	"github.com/spf13/cobra"
 )

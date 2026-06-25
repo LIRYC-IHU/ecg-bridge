@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	dicomconf "converter-fda/dicomconf"
-	mindraytofda "converter-fda/mindray-to-fda"
+	dicomconf "github.com/LIRYC-IHU/ecg-bridge/dicomconf"
+	mindraytofda "github.com/LIRYC-IHU/ecg-bridge/mindray-to-fda"
 
 	"github.com/suyashkumar/dicom"
 	"github.com/suyashkumar/dicom/pkg/tag"

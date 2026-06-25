@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	dicomconf "converter-fda/dicomconf"
-	"converter-fda/metaject"
-	nktofda "converter-fda/nk-to-fda"
+	dicomconf "github.com/LIRYC-IHU/ecg-bridge/dicomconf"
+	"github.com/LIRYC-IHU/ecg-bridge/metaject"
+	nktofda "github.com/LIRYC-IHU/ecg-bridge/nk-to-fda"
 
 	"github.com/suyashkumar/dicom"
 )

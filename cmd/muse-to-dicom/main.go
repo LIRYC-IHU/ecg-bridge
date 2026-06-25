@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"converter-fda/metaject"
-	musetodicom "converter-fda/muse-to-dicom"
-	musetofda "converter-fda/muse-to-fda"
+	"github.com/LIRYC-IHU/ecg-bridge/metaject"
+	musetodicom "github.com/LIRYC-IHU/ecg-bridge/muse-to-dicom"
+	musetofda "github.com/LIRYC-IHU/ecg-bridge/muse-to-fda"
 
 	"github.com/spf13/cobra"
 )

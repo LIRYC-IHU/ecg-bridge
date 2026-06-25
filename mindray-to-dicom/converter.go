@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	dicomconf "converter-fda/dicomconf"
-	"converter-fda/metaject"
-	mindraytofda "converter-fda/mindray-to-fda"
+	dicomconf "github.com/LIRYC-IHU/ecg-bridge/dicomconf"
+	"github.com/LIRYC-IHU/ecg-bridge/metaject"
+	mindraytofda "github.com/LIRYC-IHU/ecg-bridge/mindray-to-fda"
 
 	"github.com/suyashkumar/dicom"
 )

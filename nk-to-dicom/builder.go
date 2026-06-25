@@ -4,8 +4,8 @@ import (
 	"crypto/rand"
 	"fmt"
 
-	dicomconf "converter-fda/dicomconf"
-	nktofda "converter-fda/nk-to-fda"
+	dicomconf "github.com/LIRYC-IHU/ecg-bridge/dicomconf"
+	nktofda "github.com/LIRYC-IHU/ecg-bridge/nk-to-fda"
 
 	"github.com/suyashkumar/dicom"
 	"github.com/suyashkumar/dicom/pkg/tag"

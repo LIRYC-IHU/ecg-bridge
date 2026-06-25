@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"converter-fda/metaject"
-	philipstodicom "converter-fda/philips-to-dicom"
+	"github.com/LIRYC-IHU/ecg-bridge/metaject"
+	philipstodicom "github.com/LIRYC-IHU/ecg-bridge/philips-to-dicom"
 
 	"github.com/spf13/cobra"
 )

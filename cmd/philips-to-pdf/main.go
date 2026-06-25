@@ -13,9 +13,9 @@ import (
 	"fmt"
 	"os"
 
-	"converter-fda/ecgpdf"
-	"converter-fda/fdapdf"
-	philipstofda "converter-fda/philips-to-fda"
+	"github.com/LIRYC-IHU/ecg-bridge/ecgpdf"
+	"github.com/LIRYC-IHU/ecg-bridge/fdapdf"
+	philipstofda "github.com/LIRYC-IHU/ecg-bridge/philips-to-fda"
 )
 
 // version is set at build time via -ldflags "-X main.version=...".

@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	dicomconf "converter-fda/dicomconf"
+	dicomconf "github.com/LIRYC-IHU/ecg-bridge/dicomconf"
 
 	"github.com/suyashkumar/dicom"
 	"github.com/suyashkumar/dicom/pkg/tag"

@@ -3,7 +3,7 @@ package musetofda
 import (
 	"encoding/xml"
 
-	"converter-fda/metaject"
+	"github.com/LIRYC-IHU/ecg-bridge/metaject"
 )
 
 // MuseData is the intermediate representation parsed from a GE MUSE

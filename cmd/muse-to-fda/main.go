@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"converter-fda/metaject"
-	musetofda "converter-fda/muse-to-fda"
+	"github.com/LIRYC-IHU/ecg-bridge/metaject"
+	musetofda "github.com/LIRYC-IHU/ecg-bridge/muse-to-fda"
 
 	"github.com/spf13/cobra"
 )

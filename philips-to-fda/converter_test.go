@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	philipstodicom "converter-fda/philips-to-dicom"
-	philipstofda "converter-fda/philips-to-fda"
+	philipstodicom "github.com/LIRYC-IHU/ecg-bridge/philips-to-dicom"
+	philipstofda "github.com/LIRYC-IHU/ecg-bridge/philips-to-fda"
 )
 
 const philipsDataDir = "/Volumes/Signal/ECG/Phillips"

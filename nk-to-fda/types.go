@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"converter-fda/metaject"
+	"github.com/LIRYC-IHU/ecg-bridge/metaject"
 )
 
 // NKData holds all data extracted from a NK .DAT file.

@@ -3,7 +3,7 @@ package mindraytofda
 import (
 	"time"
 
-	"converter-fda/metaject"
+	"github.com/LIRYC-IHU/ecg-bridge/metaject"
 )
 
 type MindrayData struct {

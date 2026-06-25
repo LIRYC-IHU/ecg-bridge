@@ -1,4 +1,4 @@
-module converter-fda
+module github.com/LIRYC-IHU/ecg-bridge
 
 go 1.25.1
 

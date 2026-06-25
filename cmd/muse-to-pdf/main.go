@@ -12,9 +12,9 @@ import (
 	"fmt"
 	"os"
 
-	"converter-fda/ecgpdf"
-	"converter-fda/fdapdf"
-	musetofda "converter-fda/muse-to-fda"
+	"github.com/LIRYC-IHU/ecg-bridge/ecgpdf"
+	"github.com/LIRYC-IHU/ecg-bridge/fdapdf"
+	musetofda "github.com/LIRYC-IHU/ecg-bridge/muse-to-fda"
 )
 
 // version is set at build time via -ldflags "-X main.version=...".

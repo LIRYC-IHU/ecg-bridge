@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"converter-fda/ecgpdf"
-	fdatodicom "converter-fda/fda-to-dicom"
+	"github.com/LIRYC-IHU/ecg-bridge/ecgpdf"
+	fdatodicom "github.com/LIRYC-IHU/ecg-bridge/fda-to-dicom"
 )
 
 // ReportFromFile parses an FDA aECG XML file and maps it to an ecgpdf.Report.

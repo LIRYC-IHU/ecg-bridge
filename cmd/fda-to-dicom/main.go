@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	fdatodicom "converter-fda/fda-to-dicom"
-	"converter-fda/metaject"
+	fdatodicom "github.com/LIRYC-IHU/ecg-bridge/fda-to-dicom"
+	"github.com/LIRYC-IHU/ecg-bridge/metaject"
 
 	"github.com/spf13/cobra"
 )

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"converter-fda/metaject"
+	"github.com/LIRYC-IHU/ecg-bridge/metaject"
 
 	"github.com/LIRYC-IHU/hl7v3-aecg/hl7aecg"
 	"github.com/LIRYC-IHU/hl7v3-aecg/hl7aecg/types"

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	dicomconf "converter-fda/dicomconf"
-	"converter-fda/metaject"
-	musetofda "converter-fda/muse-to-fda"
+	dicomconf "github.com/LIRYC-IHU/ecg-bridge/dicomconf"
+	"github.com/LIRYC-IHU/ecg-bridge/metaject"
+	musetofda "github.com/LIRYC-IHU/ecg-bridge/muse-to-fda"
 
 	"github.com/suyashkumar/dicom"
 )

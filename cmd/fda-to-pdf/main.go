@@ -12,8 +12,8 @@ import (
 	"fmt"
 	"os"
 
-	"converter-fda/ecgpdf"
-	"converter-fda/fdapdf"
+	"github.com/LIRYC-IHU/ecg-bridge/ecgpdf"
+	"github.com/LIRYC-IHU/ecg-bridge/fdapdf"
 )
 
 // version is set at build time via -ldflags "-X main.version=...".

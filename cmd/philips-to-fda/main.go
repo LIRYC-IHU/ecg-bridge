@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"converter-fda/metaject"
-	philipstodicom "converter-fda/philips-to-dicom"
-	philipstofda "converter-fda/philips-to-fda"
+	"github.com/LIRYC-IHU/ecg-bridge/metaject"
+	philipstodicom "github.com/LIRYC-IHU/ecg-bridge/philips-to-dicom"
+	philipstofda "github.com/LIRYC-IHU/ecg-bridge/philips-to-fda"
 
 	"github.com/spf13/cobra"
 )

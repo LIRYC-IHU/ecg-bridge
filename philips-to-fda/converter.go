@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"converter-fda/metaject"
-	philipstodicom "converter-fda/philips-to-dicom"
+	"github.com/LIRYC-IHU/ecg-bridge/metaject"
+	philipstodicom "github.com/LIRYC-IHU/ecg-bridge/philips-to-dicom"
 
 	"github.com/LIRYC-IHU/hl7v3-aecg/hl7aecg"
 	"github.com/LIRYC-IHU/hl7v3-aecg/hl7aecg/types"

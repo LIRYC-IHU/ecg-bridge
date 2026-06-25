@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"math/big"
 
-	dicomconf "converter-fda/dicomconf"
-	musetofda "converter-fda/muse-to-fda"
+	dicomconf "github.com/LIRYC-IHU/ecg-bridge/dicomconf"
+	musetofda "github.com/LIRYC-IHU/ecg-bridge/muse-to-fda"
 
 	"github.com/suyashkumar/dicom"
 	"github.com/suyashkumar/dicom/pkg/tag"

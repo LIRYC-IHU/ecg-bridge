@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	dicomconf "converter-fda/dicomconf"
-	"converter-fda/metaject"
+	dicomconf "github.com/LIRYC-IHU/ecg-bridge/dicomconf"
+	"github.com/LIRYC-IHU/ecg-bridge/metaject"
 
 	"github.com/suyashkumar/dicom"
 )

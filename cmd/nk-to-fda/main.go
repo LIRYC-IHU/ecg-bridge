@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"converter-fda/metaject"
-	nktofda "converter-fda/nk-to-fda"
+	"github.com/LIRYC-IHU/ecg-bridge/metaject"
+	nktofda "github.com/LIRYC-IHU/ecg-bridge/nk-to-fda"
 
 	"github.com/spf13/cobra"
 )

@@ -1,7 +1,7 @@
 package nktodicom
 
 import (
-	nktofda "converter-fda/nk-to-fda"
+	nktofda "github.com/LIRYC-IHU/ecg-bridge/nk-to-fda"
 )
 
 // NKDICOMData wraps NKData with DICOM-specific metadata.

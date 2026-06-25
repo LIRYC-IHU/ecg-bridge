@@ -15,8 +15,8 @@ import (
 	"os"
 	"strings"
 
-	"converter-fda/ecgpdf"
-	nktofda "converter-fda/nk-to-fda"
+	"github.com/LIRYC-IHU/ecg-bridge/ecgpdf"
+	nktofda "github.com/LIRYC-IHU/ecg-bridge/nk-to-fda"
 )
 
 // version is set at build time via -ldflags "-X main.version=...".
