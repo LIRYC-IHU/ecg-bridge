@@ -58,9 +58,4 @@ type Report struct {
 
 	// Interpretation
 	Statements []Statement
-
-	// Forms, when true, renders the patient-identity and measurement values as
-	// fillable AcroForm text fields (pre-filled, empty when unknown) so a
-	// clinician can complete/correct them and sign in a PDF viewer.
-	Forms bool
 }

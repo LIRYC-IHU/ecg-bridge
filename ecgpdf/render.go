@@ -1,9 +1,7 @@
 package ecgpdf
 
 import (
-	"bytes"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -11,40 +9,7 @@ import (
 	"time"
 
 	"github.com/go-pdf/fpdf"
-	"github.com/pdfcpu/pdfcpu/pkg/api"
-	pdfcpumodel "github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
-
-const ptPerMM = 72.0 / 25.4 // PDF points per millimetre
-
-// formField is one editable AcroForm text field, in fpdf coordinates
-// (millimetres, top-left origin). Collected during drawing, overlaid afterwards.
-type formField struct {
-	id, value, align string
-	x, y, w, h       float64
-	multiline        bool
-}
-
-// Render-scoped form state (single-shot, single-threaded like lbl).
-var (
-	formsEnabled bool
-	formFields   []formField
-)
-
-func regField(id string, x, y, w, h float64, value, align string) {
-	if w < 4 {
-		w = 4
-	}
-	if align == "" {
-		align = "left"
-	}
-	formFields = append(formFields, formField{id: id, value: value, align: align, x: x, y: y, w: w, h: h})
-}
-
-// regFieldML registers a multiline editable field (e.g. a free-text area).
-func regFieldML(id string, x, y, w, h float64) {
-	formFields = append(formFields, formField{id: id, align: "left", x: x, y: y, w: w, h: h, multiline: true})
-}
 
 // ECG print scale. Enlarged from the 25mm/s · 10mm/mV baseline to use the
 // available right/bottom space; the red grid below is derived from these so it
@@ -75,8 +40,6 @@ var lbl labels
 // rather than wall-clock dependent.
 func Render(r *Report, lang string, w io.Writer) error {
 	lbl = labelsFor(lang)
-	formsEnabled = r.Forms
-	formFields = nil
 	scaleUV := r.ScaleUV
 	if scaleUV == 0 {
 		scaleUV = 1.25
@@ -108,53 +71,9 @@ func Render(r *Report, lang string, w io.Writer) error {
 	drawSignals(pdf, r, sr, scaleUV)
 
 	drawFooter(pdf, tr, r)
+	drawDisclaimer(pdf, tr)
 
-	if !formsEnabled || len(formFields) == 0 {
-		return pdf.Output(w)
-	}
-	var raw bytes.Buffer
-	if err := pdf.Output(&raw); err != nil {
-		return err
-	}
-	return overlayForms(raw.Bytes(), w)
-}
-
-// overlayForms stamps the collected editable fields onto the rendered PDF using
-// pdfcpu's JSON "create" API (which merges form fields onto an existing page).
-// fpdf uses a top-left mm origin; pdfcpu uses a bottom-left point origin.
-func overlayForms(src []byte, w io.Writer) error {
-	const pageHmm = 210.0 // A4 landscape height
-	type tf struct {
-		ID        string     `json:"id"`
-		Value     string     `json:"value"`
-		Pos       [2]float64 `json:"pos"`
-		Width     float64    `json:"width"`
-		Height    float64    `json:"height"`
-		Align     string     `json:"align"`
-		Multiline bool       `json:"multiline"`
-	}
-	tfs := make([]tf, 0, len(formFields))
-	for _, f := range formFields {
-		tfs = append(tfs, tf{
-			ID:        f.id,
-			Value:     f.value,
-			Pos:       [2]float64{f.x * ptPerMM, (pageHmm - (f.y + f.h)) * ptPerMM},
-			Width:     f.w * ptPerMM,
-			Height:    f.h * ptPerMM,
-			Align:     f.align,
-			Multiline: f.multiline,
-		})
-	}
-	doc := map[string]any{
-		"origin": "LowerLeft",
-		"fonts":  map[string]any{"input": map[string]any{"name": "Helvetica", "size": 9}},
-		"pages":  map[string]any{"1": map[string]any{"content": map[string]any{"textfield": tfs}}},
-	}
-	js, err := json.Marshal(doc)
-	if err != nil {
-		return err
-	}
-	return api.Create(bytes.NewReader(src), bytes.NewReader(js), w, pdfcpumodel.NewDefaultConfiguration())
+	return pdf.Output(w)
 }
 
 // Output writes the PDF bytes to outPath, or—when outPath is empty—prints them
@@ -182,48 +101,35 @@ func drawPatientBlock(pdf *fpdf.Fpdf, tr func(string) string, r *Report) {
 	pdf.SetFont("Helvetica", "", 8.5)
 	const lh = 4.4
 
-	// labelVal draws "label " then the value — as an editable field (forms on)
-	// or plain text (forms off) — spanning from after the label to xEnd.
-	labelVal := func(id string, x, y float64, label, value string, xEnd float64) {
+	// labelVal draws "label value" as plain selectable text at x, y.
+	labelVal := func(x, y float64, label, value string) {
 		pdf.SetXY(x, y)
-		if formsEnabled {
-			pdf.Write(lh, tr(label+" "))
-			fx := x + pdf.GetStringWidth(tr(label+" "))
-			regField(id, fx, y, xEnd-fx, lh, value, "left")
-		} else {
-			pdf.Write(lh, tr(label+" "+dash(value)))
-		}
+		pdf.Write(lh, tr(label+" "+dash(value)))
 	}
-	// numUnit draws a small value (field or text) at x, then a static unit.
-	numUnit := func(id string, x, y, w float64, value, unit string) {
-		if formsEnabled {
-			regField(id, x, y, w, lh, value, "left")
-			pdf.SetXY(x+w+1, y)
-			pdf.Write(lh, tr(unit))
-		} else {
-			pdf.SetXY(x, y)
-			pdf.Write(lh, tr(dashUnit(value, unit)))
-		}
+	// numUnit draws "value unit" (or "— unit" when empty) at x, y.
+	numUnit := func(x, y float64, value, unit string) {
+		pdf.SetXY(x, y)
+		pdf.Write(lh, tr(dashUnit(value, unit)))
 	}
 
 	y := 7.0
-	labelVal("pid", margin, y, lbl.id, r.PatientID, 120)
+	labelVal(margin, y, lbl.id, r.PatientID)
 	y += lh
-	labelVal("name", margin, y, lbl.name, r.Name, 120)
+	labelVal(margin, y, lbl.name, r.Name)
 	y += lh
-	labelVal("sex", margin, y, lbl.sex, r.Sex, 60)
-	labelVal("dob", 70, y, lbl.dob, fmtDOBraw(r.BirthDate), 118)
-	numUnit("age", 125, y, 12, r.Age, strings.TrimSpace(lbl.ageSuffix))
+	labelVal(margin, y, lbl.sex, r.Sex)
+	labelVal(70, y, lbl.dob, fmtDOBraw(r.BirthDate))
+	numUnit(125, y, r.Age, strings.TrimSpace(lbl.ageSuffix))
 	y += lh
-	numUnit("height", margin, y, 16, r.Height, strings.TrimSpace(lbl.cmSuffix))
-	numUnit("weight", 40, y, 16, r.Weight, strings.TrimSpace(lbl.kgSuffix))
-	numUnit("bp", 70, y, 16, r.BloodPressure, "mmHg")
+	numUnit(margin, y, r.Height, strings.TrimSpace(lbl.cmSuffix))
+	numUnit(40, y, r.Weight, strings.TrimSpace(lbl.kgSuffix))
+	numUnit(70, y, r.BloodPressure, "mmHg")
 	y += lh
-	labelVal("meds", margin, y, lbl.meds, strings.Join(r.Medications, ", "), 195)
+	labelVal(margin, y, lbl.meds, strings.Join(r.Medications, ", "))
 	y += lh
-	labelVal("symptoms", margin, y, lbl.symptoms, r.Symptoms, 195)
+	labelVal(margin, y, lbl.symptoms, r.Symptoms)
 	y += lh
-	labelVal("history", margin, y, lbl.history, r.History, 195)
+	labelVal(margin, y, lbl.history, r.History)
 }
 
 // --- header: interpretive statements (top-right) ---
@@ -256,7 +162,7 @@ func drawStatements(pdf *fpdf.Fpdf, tr func(string) string, r *Report) float64 {
 
 // drawPhysicianBlock draws a wide "physician diagnosis" area to the right of the
 // measurements, starting on the Ventricular-rate line: a bordered free-text zone
-// (an editable multiline field when forms are on) plus a Physician/Date line.
+// plus a Physician/Date line, to be completed by hand on a printout.
 func drawPhysicianBlock(pdf *fpdf.Fpdf, tr func(string) string) {
 	const (
 		lh        = 4.4
@@ -276,25 +182,14 @@ func drawPhysicianBlock(pdf *fpdf.Fpdf, tr func(string) string) {
 	pdf.SetDrawColor(150, 150, 150)
 	pdf.SetLineWidth(0.2)
 	pdf.Rect(x, boxTop, wBlock, boxBottom-boxTop, "D")
-	if formsEnabled {
-		regFieldML("diag", x+0.5, boxTop+0.5, wBlock-1, boxBottom-boxTop-1)
-	}
 
-	// Signature line: Physician: [____]   Date: [____]
+	// Signature line: Physician: ____   Date: ____
 	pdf.SetFont("Helvetica", "", 8)
 	pdf.SetXY(x, sigY)
 	pdf.Write(lh, tr(lbl.physician+" "))
 	dateLabelX := x + wBlock - 45
-	if formsEnabled {
-		pw := pdf.GetStringWidth(tr(lbl.physician + " "))
-		regField("md_physician", x+pw, sigY, dateLabelX-(x+pw)-2, lh, "", "left")
-	}
 	pdf.SetXY(dateLabelX, sigY)
 	pdf.Write(lh, tr(lbl.dateL+" "))
-	if formsEnabled {
-		dw := pdf.GetStringWidth(tr(lbl.dateL + " "))
-		regField("md_date", dateLabelX+dw, sigY, (x+wBlock)-(dateLabelX+dw), lh, "", "left")
-	}
 }
 
 // --- header: measurements table (label / right-aligned value / unit) ---
@@ -305,28 +200,24 @@ func drawMeasurements(pdf *fpdf.Fpdf, tr func(string) string, r *Report) {
 
 	y := 40.0
 	const lh = 4.3
-	row := func(id, label, value, unit string) {
+	row := func(label, value, unit string) {
 		pdf.SetXY(margin, y)
 		pdf.CellFormat(46, lh, tr(label), "", 0, "L", false, 0, "")
-		if formsEnabled {
-			regField(id, 54, y, 24, lh, value, "right")
-		} else {
-			pdf.SetXY(54, y)
-			pdf.CellFormat(24, lh, tr(value), "", 0, "R", false, 0, "")
-		}
+		pdf.SetXY(54, y)
+		pdf.CellFormat(24, lh, tr(value), "", 0, "R", false, 0, "")
 		pdf.SetXY(80, y)
 		pdf.CellFormat(16, lh, tr(unit), "", 0, "L", false, 0, "")
 		y += lh
 	}
 
-	row("hr", lbl.hr, fmt.Sprintf("%d", r.HeartRate), "bpm")
-	row("pr", lbl.prInt, fmt.Sprintf("%d", r.PRInterval), "ms")
-	row("qrs", lbl.qrsDur, fmt.Sprintf("%d", r.QRSDuration), "ms")
-	row("qtqtc", lbl.qtQtc, fmt.Sprintf("%d / %d", r.QTInterval, r.QTcInterval), "ms")
-	row("axis", lbl.axis, fmt.Sprintf("%d / %d / %d", r.PAxis, r.QRSAxis, r.TAxis), "°")
+	row(lbl.hr, fmt.Sprintf("%d", r.HeartRate), "bpm")
+	row(lbl.prInt, fmt.Sprintf("%d", r.PRInterval), "ms")
+	row(lbl.qrsDur, fmt.Sprintf("%d", r.QRSDuration), "ms")
+	row(lbl.qtQtc, fmt.Sprintf("%d / %d", r.QTInterval, r.QTcInterval), "ms")
+	row(lbl.axis, fmt.Sprintf("%d / %d / %d", r.PAxis, r.QRSAxis, r.TAxis), "°")
 	if r.ShowAmplitudes {
-		row("ampldiv", lbl.amplDiv, fmt.Sprintf("%.3f / %.3f", r.V5RAmplitude, r.V1SAmplitude), "mV")
-		row("amplsum", lbl.amplSum, fmt.Sprintf("%.3f", r.V5RAmplitude+r.V1SAmplitude), "mV")
+		row(lbl.amplDiv, fmt.Sprintf("%.3f / %.3f", r.V5RAmplitude, r.V1SAmplitude), "mV")
+		row(lbl.amplSum, fmt.Sprintf("%.3f", r.V5RAmplitude+r.V1SAmplitude), "mV")
 	}
 }
 
@@ -458,6 +349,17 @@ func drawFooter(pdf *fpdf.Fpdf, tr func(string) string, r *Report) {
 	right := fmt.Sprintf("%s %s, %s", lbl.exam, dash(r.Operator), dash(r.Location))
 	pdf.SetXY(rightX, y)
 	pdf.Write(4, tr(right))
+}
+
+// drawDisclaimer prints a centered notice at the very bottom of the page making
+// clear this PDF is an automated, non-certified conversion and must not be used
+// for diagnosis.
+func drawDisclaimer(pdf *fpdf.Fpdf, tr func(string) string) {
+	const pageHmm = 210.0 // A4 landscape height
+	pdf.SetFont("Helvetica", "I", 6.5)
+	pdf.SetTextColor(110, 110, 110)
+	pdf.SetXY(margin, pageHmm-5.5)
+	pdf.CellFormat(297.0-2*margin, 3, tr(lbl.disclaimer), "", 0, "C", false, 0, "")
 }
 
 // --- helpers ---
