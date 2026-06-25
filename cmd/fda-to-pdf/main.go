@@ -18,11 +18,9 @@ import (
 
 func main() {
 	var in, out, lang string
-	var forms bool
 	flag.StringVar(&in, "i", "", "input FDA aECG XML file (required)")
 	flag.StringVar(&out, "o", "", "output PDF path; if omitted, prints the base64-encoded PDF to stdout")
 	flag.StringVar(&lang, "l", "en", "report language: en or fr")
-	flag.BoolVar(&forms, "forms", true, "render patient/measurement values as fillable AcroForm fields")
 	flag.Parse()
 
 	if in == "" {
@@ -35,7 +33,6 @@ func main() {
 	if err != nil {
 		fail("%v", err)
 	}
-	rep.Forms = forms
 
 	var buf bytes.Buffer
 	if err := ecgpdf.Render(rep, lang, &buf); err != nil {
