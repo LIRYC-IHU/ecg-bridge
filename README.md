@@ -1,4 +1,4 @@
-# converter-fda
+# converter-ecg
 
 A collection of Go modules for converting ECG binary formats to and from FDA-compliant HL7 v3 aECG XML, using the [hl7v3-aecg](https://github.com/LIRYC-IHU/hl7v3-aecg) library.
 
@@ -83,74 +83,89 @@ converter-fda/
 ```
 
 <!-- CLI_TOOLS_START -->
+
 ## CLI Tools
 
-- `fda-to-dicom` 
+- `fda-to-dicom`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/fda-to-dicom@latest
 ```
 
-- `fda-to-pdf` 
+- `fda-to-pdf`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/fda-to-pdf@latest
 ```
 
-- `mindray-to-dicom` 
+- `mindray-to-dicom`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/mindray-to-dicom@latest
 ```
 
-- `mindray-to-fda` 
+- `mindray-to-fda`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/mindray-to-fda@latest
 ```
 
-- `mindray-to-pdf` 
+- `mindray-to-pdf`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/mindray-to-pdf@latest
 ```
 
-- `muse-to-dicom` 
+- `muse-to-dicom`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/muse-to-dicom@latest
 ```
 
-- `muse-to-fda` 
+- `muse-to-fda`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/muse-to-fda@latest
 ```
 
-- `muse-to-pdf` 
+- `muse-to-pdf`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/muse-to-pdf@latest
 ```
 
-- `nk-to-dicom` 
+- `nk-to-dicom`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/nk-to-dicom@latest
 ```
 
-- `nk-to-fda` 
+- `nk-to-fda`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/nk-to-fda@latest
 ```
 
-- `nk-to-pdf` 
+- `nk-to-pdf`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/nk-to-pdf@latest
 ```
 
-- `philips-to-dicom` 
+- `philips-to-dicom`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/philips-to-dicom@latest
 ```
 
-- `philips-to-fda` 
+- `philips-to-fda`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/philips-to-fda@latest
 ```
 
-- `philips-to-pdf` 
+- `philips-to-pdf`
+
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/philips-to-pdf@latest
 ```
