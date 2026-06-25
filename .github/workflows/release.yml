@@ -72,7 +72,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ecg-bridge_${{ matrix.goos }}_${{ matrix.goarch }}
-          path: ecg-bridge_*.{tar.gz,zip}
+          path: |
+            ecg-bridge_*.tar.gz
+            ecg-bridge_*.zip
           if-no-files-found: error
 
   release:
