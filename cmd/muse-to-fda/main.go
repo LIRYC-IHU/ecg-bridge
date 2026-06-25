@@ -162,7 +162,11 @@ func printDebug(d *musetofda.MuseData) {
 	fmt.Fprintf(os.Stderr, "Diagnosis statements: %d\n", len(d.DiagnosisStatements))
 }
 
+// version is set at build time via -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
+	rootCmd.Version = version
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}

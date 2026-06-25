@@ -174,7 +174,11 @@ func printDebug(d *fdatodicom.FDAData) {
 	fmt.Fprintln(os.Stderr, "======================")
 }
 
+// version is set at build time via -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
+	rootCmd.Version = version
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}

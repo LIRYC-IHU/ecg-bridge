@@ -17,12 +17,21 @@ import (
 	musetofda "converter-fda/muse-to-fda"
 )
 
+// version is set at build time via -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
 	var in, out, lang string
 	flag.StringVar(&in, "i", "", "input GE MUSE XML file (required)")
 	flag.StringVar(&out, "o", "", "output PDF path; if omitted, prints the base64-encoded PDF to stdout")
 	flag.StringVar(&lang, "l", "en", "report language: en or fr")
+	var showVersion bool
+	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.Parse()
+	if showVersion {
+		fmt.Println(version)
+		return
+	}
 
 	if in == "" {
 		fmt.Fprintln(os.Stderr, "error: -i input file is required")
