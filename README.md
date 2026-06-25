@@ -176,3 +176,22 @@ go get github.com/LIRYC-IHU/hl7v3-aecg
 - [HL7 v3 aECG Specification (March 2005)](https://www.hl7.org/documentcenter/public/standards/v3/V3_DT_SPEC_AECG_R1_2005MAR.zip)
 - [FDA ECG Warehouse](https://www.fda.gov/science-research/bioinformatics-tools/ecg-warehouse)
 - [DICOM Standard — Waveform Module](https://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_C.10.html)
+
+## Funding
+
+<p align="center">
+  <img src="assets/France_2030_2022_03_logotype_rouge_bleu.jpg" alt="France 2030" height="100" style="margin: 0 20px;">
+  <img src="assets/france-relance-europe.png" alt="France Relance - Europe" height="100" style="margin: 0 20px;">
+</p>
+
+This project has been funded by the French government as part of the France 2030
+initiative and by the European Union - Next Generation EU as part of the France
+Relance plan.
+
+## License
+
+This project is licensed under the **Apache License 2.0** — see the
+[LICENSE](LICENSE) file for details.
+
+It depends on [hl7v3-aecg](https://github.com/LIRYC-IHU/hl7v3-aecg), also
+developed at IHU LIRYC.
