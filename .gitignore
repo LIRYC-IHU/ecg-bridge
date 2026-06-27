@@ -32,4 +32,10 @@ go.work.sum
 # .vscode/
 .grepai/
 
-./data_* 
+# Patient data / sample recordings — NEVER commit (the "./" prefix below did not
+# actually match subdirectories, leaving real patient files committable).
+data_*/
+*.mwf
+*.DAT
+*.PAT
+/1.xml
