@@ -171,12 +171,6 @@ go get github.com/LIRYC-IHU/hl7v3-aecg
 
 - Go 1.25+
 
-## References
-
-- [HL7 v3 aECG Specification (March 2005)](https://www.hl7.org/documentcenter/public/standards/v3/V3_DT_SPEC_AECG_R1_2005MAR.zip)
-- [FDA ECG Warehouse](https://www.fda.gov/science-research/bioinformatics-tools/ecg-warehouse)
-- [DICOM Standard — Waveform Module](https://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_C.10.html)
-
 ## Funding
 
 <p align="center">
