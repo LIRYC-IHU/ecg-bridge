@@ -8,25 +8,26 @@ import (
 	"os"
 	"strings"
 
+	"github.com/LIRYC-IHU/ecg-bridge/metaject"
+
 	"github.com/LIRYC-IHU/hl7v3-aecg/hl7aecg"
 	"github.com/LIRYC-IHU/hl7v3-aecg/hl7aecg/types"
 )
 
-// Convert parses the DICOM file, optionally merges metadata, and writes FDA aECG XML.
-// If outputPath is empty, output is written to stdout.
-func Convert(inputPath, outputPath, metadataPath string) error {
+// Convert parses the DICOM file, optionally anonymizes and injects metadata,
+// and writes FDA aECG XML. If outputPath is empty, output is written to stdout.
+// When anonymize is true, direct patient identifiers are stripped from the output.
+// When meta is non-nil, its fields overwrite the parsed metadata (injection).
+func Convert(inputPath, outputPath string, anonymize bool, meta *metaject.Override) error {
 	data, err := ParseDicom(inputPath)
 	if err != nil {
 		return fmt.Errorf("reading DICOM: %w", err)
 	}
 
-	if metadataPath != "" {
-		meta, err := LoadMetadata(metadataPath)
-		if err != nil {
-			return fmt.Errorf("reading metadata: %w", err)
-		}
-		data.MergeMetadata(meta)
+	if anonymize {
+		data.Anonymize()
 	}
+	data.ApplyMetadata(meta)
 
 	xmlStr, err := buildAECG(data)
 	if err != nil {
