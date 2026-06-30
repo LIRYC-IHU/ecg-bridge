@@ -85,6 +85,11 @@ converter-fda/
 <!-- CLI_TOOLS_START -->
 ## CLI Tools
 
+- `dicom-to-fda` 
+```bash
+go install github.com/LIRYC-IHU/ecg-bridge/cmd/dicom-to-fda@latest
+```
+
 - `fda-to-dicom` 
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/fda-to-dicom@latest
