@@ -11,14 +11,23 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime/debug"
 
 	"github.com/LIRYC-IHU/ecg-bridge/ecgpdf"
 	"github.com/LIRYC-IHU/ecg-bridge/fdapdf"
 	musetofda "github.com/LIRYC-IHU/ecg-bridge/muse-to-fda"
 )
 
-// version is set at build time via -ldflags "-X main.version=...".
-var version = "dev"
+func Version() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "unknown"
+	}
+	if info.Main.Version != "" {
+		return info.Main.Version
+	}
+	return "dev"
+}
 
 func main() {
 	var in, out, lang string
@@ -29,7 +38,7 @@ func main() {
 	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.Parse()
 	if showVersion {
-		fmt.Println(version)
+		fmt.Println(Version())
 		return
 	}
 

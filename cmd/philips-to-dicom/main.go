@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"github.com/LIRYC-IHU/ecg-bridge/metaject"
@@ -163,11 +164,19 @@ func printDebug(d *philipstodicom.PhilipsData) {
 	fmt.Fprintln(os.Stderr, "=========================")
 }
 
-// version is set at build time via -ldflags "-X main.version=...".
-var version = "dev"
+func Version() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "unknown"
+	}
+	if info.Main.Version != "" {
+		return info.Main.Version
+	}
+	return "dev"
+}
 
 func main() {
-	rootCmd.Version = version
+	rootCmd.Version = Version()
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
