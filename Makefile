@@ -1,6 +1,5 @@
 TOOLS     := $(notdir $(wildcard cmd/*))
-VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS   := -ldflags "-X main.version=$(VERSION) -s -w"
+LDFLAGS   := -ldflags "-s -w"
 BIN_DIR   := bin
 SRCS      := $(shell find . -name "*.go" -not -path "./vendor/*")
 
