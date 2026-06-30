@@ -43,8 +43,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
         run: |
-          VERSION=${GITHUB_REF_NAME}
-          LDFLAGS="-X main.version=${VERSION} -s -w"
+          LDFLAGS="-s -w"
           TOOLS=$(ls cmd/)
           STAGE=dist/${{ matrix.goos }}_${{ matrix.goarch }}
           mkdir -p "$STAGE"
