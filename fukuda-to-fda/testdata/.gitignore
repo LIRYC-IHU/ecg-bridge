@@ -1,0 +1,2 @@
+# Patient ECG recordings — never commit (real patient data).
+*.ECG

@@ -19,6 +19,13 @@ Each converter lives in its own directory and can be used independently.
 | `philipsXml-to-fda` | Philips ECG XML       | FDA HL7 v3 aECG XML   | Done   |
 | `mindray-to-fda`    | BeneHeart R12 .PAT    | FDA HL7 v3 aECG XML   | Done   |
 | `mindray-to-dicom`  | BeneHeart R12 .PAT    | DICOM (ECG waveforms) | Done   |
+| `fukuda-to-fda`     | Fukuda .ECG           | FDA HL7 v3 aECG XML   | Done   |
+| `fukuda-to-dicom`   | Fukuda .ECG           | DICOM (ECG waveforms) | Done   |
+
+The Fukuda `.ECG` waveform is decompressed **natively** (Huffman bitstream +
+2nd-order predictor, reverse-engineered from paired sample recordings) — no
+proprietary software or license is required. Decoding is validated byte-exact
+against the paired reference (MFER) exports.
 
 ## PDF Reports
 
@@ -33,6 +40,7 @@ selectable-text metadata, fillable form fields, and a physician-diagnosis block.
 | `philips-to-pdf` | Philips SierraECG XML | Wrapper: Philips → FDA → PDF      |
 | `muse-to-pdf`    | GE MUSE XML           | Wrapper: MUSE → FDA → PDF         |
 | `mindray-to-pdf` | BeneHeart R12 .PAT    | Wrapper: Mindray → FDA → PDF      |
+| `fukuda-to-pdf`  | Fukuda .ECG           | Direct (native decode → PDF)      |
 
 Every non-NK vendor converts to FDA aECG first, then the shared renderer turns the
 FDA document into a PDF — a single code path (`ecgpdf` + `fdapdf`) serves all of
@@ -76,6 +84,8 @@ converter-fda/
 ├── mindray-to-fda/     # Mindray .PAT → FDA HL7 v3 aECG XML
 ├── mindray-to-dicom/   # Mindray .PAT → DICOM ECG
 ├── muse-to-fda/        # GE MUSE XML → FDA HL7 v3 aECG XML
+├── fukuda-to-fda/      # Fukuda .ECG → FDA HL7 v3 aECG XML (native decode)
+├── fukuda-to-dicom/    # Fukuda .ECG → DICOM ECG
 ├── ecgpdf/             # Shared vendor-neutral PDF renderer (Report → PDF)
 ├── fdapdf/             # FDA aECG XML → ecgpdf.Report mapper
 ├── cmd/                # CLI entrypoints (*-to-fda, *-to-dicom, *-to-pdf)
@@ -98,6 +108,21 @@ go install github.com/LIRYC-IHU/ecg-bridge/cmd/fda-to-dicom@latest
 - `fda-to-pdf` 
 ```bash
 go install github.com/LIRYC-IHU/ecg-bridge/cmd/fda-to-pdf@latest
+```
+
+- `fukuda-to-dicom` 
+```bash
+go install github.com/LIRYC-IHU/ecg-bridge/cmd/fukuda-to-dicom@latest
+```
+
+- `fukuda-to-fda` 
+```bash
+go install github.com/LIRYC-IHU/ecg-bridge/cmd/fukuda-to-fda@latest
+```
+
+- `fukuda-to-pdf` 
+```bash
+go install github.com/LIRYC-IHU/ecg-bridge/cmd/fukuda-to-pdf@latest
 ```
 
 - `mindray-to-dicom` 
