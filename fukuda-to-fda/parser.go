@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -41,6 +42,7 @@ func ParseFile(dat []byte) (*FukudaData, error) {
 		},
 		Measurement: findMeasurements(dat),
 	}
+	fillDemographics(dat, &fd.Patient)
 
 	startBit := (mk + 44) * 8
 	decoded := DecodeAll(dat, startBit, nLeads, nSamples)
@@ -112,6 +114,65 @@ func findMeasurements(dat []byte) MeasurementData {
 		}
 	}
 	return MeasurementData{}
+}
+
+// Demographic field offsets in the FX-series header. These are fixed absolute
+// offsets recovered by reverse-engineering [RE] — they hold across the reference
+// set but may shift on a different firmware; every read is range/printable
+// checked so a mismatch yields an empty field rather than garbage.
+const (
+	offPatientID = 688  // null-terminated ASCII, "<id>) …"
+	offSex       = 1604 // BE uint16: 1=Male, 2=Female
+	offBirthYear = 1610 // BE uint16
+	offBirthMon  = 1612 // BE uint16
+	offBirthDay  = 1614 // BE uint16
+	offName      = 1650 // null-terminated ASCII
+)
+
+// fillDemographics reads patient name, ID, sex and birth date from their fixed
+// header offsets, leaving a field empty when the stored value is missing or
+// implausible.
+func fillDemographics(dat []byte, p *PatientData) {
+	p.FamilyName = readCString(dat, offName)
+	if id := readCString(dat, offPatientID); id != "" {
+		// "<id>) <composite>" — keep the leading token as the patient ID.
+		if i := strings.IndexAny(id, ") \t"); i > 0 {
+			id = id[:i]
+		}
+		p.PatientID = id
+	}
+	if offSex+2 <= len(dat) {
+		switch binary.BigEndian.Uint16(dat[offSex : offSex+2]) {
+		case 1:
+			p.Gender = "M"
+		case 2:
+			p.Gender = "F"
+		}
+	}
+	if offBirthDay+2 <= len(dat) {
+		y := int(binary.BigEndian.Uint16(dat[offBirthYear : offBirthYear+2]))
+		mo := int(binary.BigEndian.Uint16(dat[offBirthMon : offBirthMon+2]))
+		d := int(binary.BigEndian.Uint16(dat[offBirthDay : offBirthDay+2]))
+		if y >= 1900 && y <= 2100 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31 {
+			p.BirthDate = fmt.Sprintf("%04d%02d%02d", y, mo, d)
+		}
+	}
+}
+
+// readCString returns the printable, null-terminated ASCII string at off, or ""
+// if it is absent, empty, or contains non-printable bytes.
+func readCString(dat []byte, off int) string {
+	if off < 0 || off >= len(dat) {
+		return ""
+	}
+	end := off
+	for end < len(dat) && dat[end] != 0 {
+		if dat[end] < 0x20 || dat[end] > 0x7e {
+			return ""
+		}
+		end++
+	}
+	return strings.TrimSpace(string(dat[off:end]))
 }
 
 // findDeviceModel returns the Fukuda device model string if present (e.g.
