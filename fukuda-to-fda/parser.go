@@ -122,7 +122,7 @@ func findMeasurements(dat []byte) MeasurementData {
 // checked so a mismatch yields an empty field rather than garbage.
 const (
 	offPatientID = 688  // null-terminated ASCII, "<id>) …"
-	offSex       = 1604 // BE uint16: 1=Male, 2=Female
+	offSex       = 1604 // BE uint16: 1=Male; 2=Female assumed (unverified — all reference files are Male)
 	offBirthYear = 1610 // BE uint16
 	offBirthMon  = 1612 // BE uint16
 	offBirthDay  = 1614 // BE uint16
