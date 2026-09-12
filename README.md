@@ -49,8 +49,18 @@ amplitudes, medications, clinical history, …).
 
 ### Features
 
-- **Vector traces** — polylines on a calibrated grid (28 mm/s · 12 mm/mV); zoom
-  without pixelation. Each major grid square stays 0.2 s / 0.5 mV.
+- **Vector traces** — polylines on a calibrated grid at the clinical standard
+  scale (25 mm/s · 10 mm/mV); zoom without pixelation. A minor grid square is
+  1 mm — 0.04 s by 0.1 mV — and a major square 5 mm, so the ruling a clinician
+  measures against is square and true to scale. The scale is not a layout
+  parameter: see `ecgpdf/render_test.go`, which pins it.
+- **Calibration pulse** — a 1 mV × 200 ms reference step opens every row, so the
+  gain announced on the page can be checked against the gain actually drawn.
+- **Missing parameters are stated** — when the source file carries no
+  acquisition bandwidth, no recording time or no interpretation status, the
+  document says so rather than leaving the field blank.
+- **No derived measurement** — device-reported values are reproduced verbatim
+  and nothing is computed from them.
 - **Selectable text** — all metadata is real text, not a rasterized image.
 - **Fillable forms** — patient and measurement values are pre-filled AcroForm
   fields (blank when unknown); a clinician can complete/correct and sign in any

@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -11,23 +12,40 @@ import (
 	"github.com/go-pdf/fpdf"
 )
 
-// ECG print scale. Enlarged from the 25mm/s · 10mm/mV baseline to use the
-// available right/bottom space; the red grid below is derived from these so it
-// stays a valid 0.2s / 0.5mV measurement grid at this scale.
+// ECG print scale. These are the conventional clinical values (ANSI/AAMI EC11,
+// AHA/ACCF/HRS 2007) and the ones the project declares to its regulator: they
+// are not layout parameters and must not be changed to fill the page. The red
+// grid below is derived from them, which is what keeps a minor square exactly
+// 1mm × 1mm — 0.04s by 0.1mV — so a clinician measuring on the printout counts
+// real graduations.
 const (
-	mmPerSec = 28.0 // paper speed
-	mmPerMV  = 12.0 // gain
+	mmPerSec = 25.0 // paper speed
+	mmPerMV  = 10.0 // gain
 )
 
 // Page geometry (A4 landscape, mm).
+//
+// The plot area is split into a calibration lead-in (calW) carrying the 1mV ×
+// 200ms pulse, followed by the 10s of trace. calW is a multiple of the 5mm
+// major grid pitch so t=0 of the trace falls on a major grid line.
 const (
 	margin  = 8.0
 	rightX  = 200.0 // left edge of the top-right statements column
 	gridX   = margin
-	gridW   = 280.0 // 4 columns * 70mm == 10s at 28mm/s
+	calW    = 15.0          // calibration lead-in ahead of t=0
+	traceW  = 250.0         // 4 columns * 62.5mm == 10s at 25mm/s
+	gridW   = calW + traceW // full ruled area
+	traceX  = gridX + calW  // x of t=0
 	gridTop = 74.0
 	rowH    = 29.0
 	rhythmH = 34.0
+)
+
+// Calibration pulse geometry, within the calW lead-in (mm).
+const (
+	calLeadInMM = 4.0              // flat baseline before the step
+	calWidthMM  = 0.200 * mmPerSec // 200ms
+	calHeightMM = 1.0 * mmPerMV    // 1mV
 )
 
 // lbl holds the active language's static labels. Set once at the top of Render;
@@ -114,6 +132,10 @@ func drawPatientBlock(pdf *fpdf.Fpdf, tr func(string) string, r *Report) {
 
 	y := 7.0
 	labelVal(margin, y, lbl.id, r.PatientID)
+	// Acquisition date and time are mandatory on the document itself (IHE CARD
+	// TF-2 §4.6.4.2.2). Carrying them only in the PDF metadata would lose them
+	// on print, which is where this document is read.
+	labelVal(125, y, lbl.recordedAt, fmtRecordedAt(r.RecordingAt))
 	y += lh
 	labelVal(margin, y, lbl.name, r.Name)
 	y += lh
@@ -134,18 +156,54 @@ func drawPatientBlock(pdf *fpdf.Fpdf, tr func(string) string, r *Report) {
 
 // --- header: interpretive statements (top-right) ---
 
+// statementsBottom is the lowest y the statements column may reach: below it
+// sits the physician block, which spans the full width of the page.
+const statementsBottom = 38.0
+
 func drawStatements(pdf *fpdf.Fpdf, tr func(string) string, r *Report) float64 {
 	pdf.SetTextColor(0, 0, 0)
-	const lh = 4.4
 	y := 7.0
+
+	// Interpretive statements are the acquiring device's, not this software's.
+	// Name the device that produced them and state their confirmation status —
+	// or say the source file does not carry one, rather than leaving a reader
+	// to assume the statements were confirmed.
+	if hasStatements(r) {
+		pdf.SetFont("Helvetica", "", 7)
+		pdf.SetTextColor(90, 90, 90)
+		pdf.SetXY(rightX, y)
+		pdf.Write(3.4, tr(lbl.interpDevice+" "+dash(r.DeviceModel)))
+		y += 3.4
+		status := strings.TrimSpace(r.InterpretationStatus)
+		if status == "" {
+			status = lbl.notInSource
+		}
+		pdf.SetXY(rightX, y)
+		pdf.Write(3.4, tr(lbl.interpStatus+" "+status))
+		y += 4.6
+		pdf.SetTextColor(0, 0, 0)
+	}
+
+	// A device can emit more statements than the column comfortably holds.
+	// Tighten the leading and the type together rather than letting the list
+	// run over the physician block — an interpretive statement the device did
+	// produce must stay readable, so it is never dropped.
+	lh, fontPt := 4.4, 8.5
+	if n := countStatements(r); n > 0 {
+		if fit := (statementsBottom - y) / float64(n); fit < lh {
+			lh = math.Max(fit, 2.4)
+			fontPt = math.Min(8.5, lh*1.85)
+		}
+	}
+
 	for _, st := range r.Statements {
 		if st.Text == "" {
 			continue
 		}
 		if st.Emphasis {
-			pdf.SetFont("Helvetica", "B", 8.5)
+			pdf.SetFont("Helvetica", "B", fontPt)
 		} else {
-			pdf.SetFont("Helvetica", "", 8.5)
+			pdf.SetFont("Helvetica", "", fontPt)
 		}
 		if st.Code != "" {
 			pdf.SetXY(rightX, y)
@@ -215,9 +273,12 @@ func drawMeasurements(pdf *fpdf.Fpdf, tr func(string) string, r *Report) {
 	row(lbl.qrsDur, fmt.Sprintf("%d", r.QRSDuration), "ms")
 	row(lbl.qtQtc, fmt.Sprintf("%d / %d", r.QTInterval, r.QTcInterval), "ms")
 	row(lbl.axis, fmt.Sprintf("%d / %d / %d", r.PAxis, r.QRSAxis, r.TAxis), "°")
+	// RV5 and SV1 are reproduced as the source file carries them. Their sum is
+	// deliberately NOT computed here: RV5+SV1 is the Sokolow-Lyon voltage
+	// criterion, so deriving it would make this renderer produce a measurement
+	// of its own rather than reproduce the acquiring device's.
 	if r.ShowAmplitudes {
 		row(lbl.amplDiv, fmt.Sprintf("%.3f / %.3f", r.V5RAmplitude, r.V1SAmplitude), "mV")
-		row(lbl.amplSum, fmt.Sprintf("%.3f", r.V5RAmplitude+r.V1SAmplitude), "mV")
 	}
 }
 
@@ -226,10 +287,14 @@ func drawMeasurements(pdf *fpdf.Fpdf, tr func(string) string, r *Report) {
 func drawScaleNote(pdf *fpdf.Fpdf, tr func(string) string, r *Report) {
 	pdf.SetFont("Helvetica", "", 8)
 	pdf.SetTextColor(0, 0, 0)
-	note := fmt.Sprintf("%g mm/mV   %g mm/s   ", mmPerMV, mmPerSec)
-	if r.Filter != "" {
-		note += lbl.filter + " " + r.Filter
+	// The acquisition bandwidth is stated when the source file carries it, and
+	// its absence is stated when it does not. A blank here would read as "no
+	// filtering", which is a different claim from "unknown".
+	band := strings.TrimSpace(r.Filter)
+	if band == "" {
+		band = lbl.notInSource
 	}
+	note := fmt.Sprintf("%g mm/mV   %g mm/s   %s %s", mmPerMV, mmPerSec, lbl.filter, band)
 	pdf.SetXY(40, gridTop-4)
 	pdf.Write(4, tr(note))
 	pdf.SetXY(gridX+gridW-18, gridTop-4)
@@ -244,7 +309,7 @@ func drawSignals(pdf *fpdf.Fpdf, r *Report, sr, scaleUV float64) {
 		{"II", "aVL", "V2", "V5"},
 		{"III", "aVF", "V3", "V6"},
 	}
-	colW := gridW / 4.0
+	colW := traceW / 4.0
 	secPerCol := colW / mmPerSec // 2.5s
 
 	// Round caps/joins keep the trace smooth at any zoom level.
@@ -253,19 +318,66 @@ func drawSignals(pdf *fpdf.Fpdf, r *Report, sr, scaleUV float64) {
 
 	for r0 := 0; r0 < 3; r0++ {
 		cellTop := gridTop + float64(r0)*rowH
+		drawCalibrationPulse(pdf, cellTop, rowH)
 		for c := 0; c < 4; c++ {
 			name := layout[r0][c]
-			x0 := gridX + float64(c)*colW
+			x0 := traceX + float64(c)*colW
 			startSec := float64(c) * secPerCol
 			plotLead(pdf, r.Leads[name], sr, scaleUV, x0, cellTop, colW, rowH, startSec, secPerCol)
 			leadLabel(pdf, name, x0+1, cellTop+1)
+			// IHE CARD TF-2 §4.6.4.2.2: mark every lead-to-lead transition
+			// within a row, so a reader can see where one lead stops and the
+			// next begins rather than reading across a join as one trace.
+			if c > 0 {
+				drawTransitionMark(pdf, x0, cellTop, rowH)
+			}
 		}
 	}
 
 	// Rhythm strip: lead II across the full 10s.
 	rhTop := gridTop + 3*rowH
-	plotLead(pdf, r.Leads["II"], sr, scaleUV, gridX, rhTop, gridW, rhythmH, 0, gridW/mmPerSec)
-	leadLabel(pdf, "II", gridX+1, rhTop+1)
+	drawCalibrationPulse(pdf, rhTop, rhythmH)
+	plotLead(pdf, r.Leads["II"], sr, scaleUV, traceX, rhTop, traceW, rhythmH, 0, traceW/mmPerSec)
+	leadLabel(pdf, "II", traceX+1, rhTop+1)
+}
+
+// drawCalibrationPulse draws the 1mV × 200ms reference step in the lead-in
+// strip ahead of t=0, on the row's baseline and in the same ink as the trace.
+// It is the reader's only on-document check that the gain announced in the
+// scale note is the gain actually drawn.
+func drawCalibrationPulse(pdf *fpdf.Fpdf, cellTop, cellH float64) {
+	baseY := cellTop + cellH/2
+	x := gridX + calLeadInMM
+	top := baseY - calHeightMM
+
+	pdf.SetDrawColor(0, 0, 0)
+	pdf.SetLineWidth(0.2)
+	pdf.MoveTo(gridX+1, baseY)
+	pdf.LineTo(x, baseY)
+	pdf.LineTo(x, top)
+	pdf.LineTo(x+calWidthMM, top)
+	pdf.LineTo(x+calWidthMM, baseY)
+	pdf.LineTo(traceX, baseY)
+	pdf.DrawPath("D")
+}
+
+// drawTransitionMark draws the broken-bar marker at a lead-to-lead join: two
+// short vertical strokes straddling the baseline, leaving the baseline itself
+// clear so the mark cannot be mistaken for signal.
+func drawTransitionMark(pdf *fpdf.Fpdf, x, cellTop, cellH float64) {
+	baseY := cellTop + cellH/2
+	total := cellH / 4
+	gap := total / 4
+	halfBar := (total - gap) / 2
+	halfGap := gap / 2
+
+	pdf.SetDrawColor(0, 0, 0)
+	pdf.SetLineWidth(0.3)
+	pdf.MoveTo(x, baseY-halfGap-halfBar)
+	pdf.LineTo(x, baseY-halfGap)
+	pdf.MoveTo(x, baseY+halfGap)
+	pdf.LineTo(x, baseY+halfGap+halfBar)
+	pdf.DrawPath("D")
 }
 
 // plotLead draws one lead trace as a single full-resolution vector path,
@@ -377,6 +489,30 @@ func dashUnit(v, unit string) string {
 		return "— " + unit
 	}
 	return v + " " + unit
+}
+
+// countStatements counts the non-empty interpretive statements in the report.
+func countStatements(r *Report) int {
+	n := 0
+	for _, st := range r.Statements {
+		if strings.TrimSpace(st.Text) != "" {
+			n++
+		}
+	}
+	return n
+}
+
+// hasStatements reports whether the report carries at least one non-empty
+// interpretive statement.
+func hasStatements(r *Report) bool { return countStatements(r) > 0 }
+
+// fmtRecordedAt renders the acquisition instant, or "" when the source file did
+// not carry one — dash() then marks it absent rather than inventing a date.
+func fmtRecordedAt(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format("2006-01-02 15:04")
 }
 
 // fmtDOBraw renders a YYYYMMDD birth date as YYYY-MM-DD, or "" when unknown

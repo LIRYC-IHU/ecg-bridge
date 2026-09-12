@@ -128,11 +128,13 @@ func buildReport(nd *nktofda.NKData, lang string) *ecgpdf.Report {
 		ShowAmplitudes: true,
 		V5RAmplitude:   m.V5RAmplitude,
 		V1SAmplitude:   m.V1SAmplitude,
-		Filter:         "H50–150 Hz",
-		SampleRate:     float64(nd.Record.SampleRate),
-		ScaleUV:        nd.Record.Scale,
-		Leads:          leadMap,
-		Statements:     sts,
+		// Filter is deliberately left empty: the PEC parser reads no filter
+		// setting from the .DAT, so any band printed here would be an assertion
+		// the source file never made. The renderer states the absence instead.
+		SampleRate: float64(nd.Record.SampleRate),
+		ScaleUV:    nd.Record.Scale,
+		Leads:      leadMap,
+		Statements: sts,
 	}
 }
 

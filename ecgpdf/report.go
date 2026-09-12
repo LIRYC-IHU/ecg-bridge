@@ -43,12 +43,16 @@ type Report struct {
 	HeartRate, PRInterval, QRSDuration, QTInterval, QTcInterval int
 	PAxis, QRSAxis, TAxis                                       int
 
-	// Vendor-specific amplitudes (NK RV5/SV1); rendered only when true.
+	// Vendor-specific amplitudes (NK RV5/SV1), read from the source file and
+	// reproduced as-is; rendered only when true. No value is ever derived from
+	// them — in particular their sum (a voltage criterion) is not computed here.
 	ShowAmplitudes             bool
 	V5RAmplitude, V1SAmplitude float64
 
 	// Filter spec value, e.g. "H50–150 Hz". The localized "Filter:" word is
-	// added by the renderer; an empty value hides the filter part entirely.
+	// added by the renderer. An empty value is NOT hidden: the renderer states
+	// that the source file does not carry the acquisition bandwidth, so the
+	// document never stays silent about a parameter it could not read.
 	Filter string
 
 	// Signal
@@ -56,6 +60,13 @@ type Report struct {
 	ScaleUV    float64            // µV per sample unit (digit/LSB)
 	Leads      map[string][]int32 // expects I,II,III,aVR,aVL,aVF,V1..V6
 
-	// Interpretation
-	Statements []Statement
+	// Interpretation. Statements are reproduced verbatim from the source file
+	// and attributed to DeviceModel when rendered.
+	//
+	// InterpretationStatus is the confirmation status the source file carries
+	// for those statements ("Confirmed" / "Unconfirmed Report", IHE CARD TF-2
+	// §4.6.4.2.2). It is never inferred: when the source does not state it, the
+	// renderer says so explicitly rather than picking a default.
+	Statements           []Statement
+	InterpretationStatus string
 }
