@@ -39,9 +39,14 @@ type Report struct {
 	Location    string
 	RecordingAt time.Time
 
-	// Measurements (0 = not set, rendered as 0)
-	HeartRate, PRInterval, QRSDuration, QTInterval, QTcInterval int
-	PAxis, QRSAxis, TAxis                                       int
+	// Measurements produced by the acquiring device, in bpm / ms / degrees.
+	//
+	// These are pointers so that "absent" is representable. A plain int cannot
+	// distinguish a QRS axis the device measured at 0° from one it never
+	// reported, and the renderer would print both as "0" — asserting a
+	// measurement the source file never made. nil renders as an em dash.
+	HeartRate, PRInterval, QRSDuration, QTInterval, QTcInterval *int
+	PAxis, QRSAxis, TAxis                                       *int
 
 	// Vendor-specific amplitudes (NK RV5/SV1), read from the source file and
 	// reproduced as-is; rendered only when true. No value is ever derived from
@@ -69,4 +74,24 @@ type Report struct {
 	// renderer says so explicitly rather than picking a default.
 	Statements           []Statement
 	InterpretationStatus string
+}
+
+// Measured wraps a measurement the source file carried, for the optional
+// fields of Report.
+func Measured(v int) *int { return &v }
+
+// MeasuredNonZero wraps v unless it is zero.
+//
+// Every vendor model in this repository stores measurements as plain integers
+// with zero meaning "the device did not report this", so that is the rule the
+// front-ends apply. It is lossy in one direction: a frontal axis the device
+// genuinely measured at 0° is reported as absent. That is the safe direction —
+// an axis is readable from the trace, whereas a fabricated "0" in the
+// measurement table is indistinguishable from a finding. A front-end whose
+// format can tell the two apart should call Measured directly.
+func MeasuredNonZero(v int) *int {
+	if v == 0 {
+		return nil
+	}
+	return &v
 }

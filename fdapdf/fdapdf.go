@@ -67,14 +67,14 @@ func FromFDA(d *fdatodicom.FDAData) *ecgpdf.Report {
 		Department:  d.InstitutionName,
 		Operator:    d.OperatorID,
 		RecordingAt: studyTime(d.StudyDate, d.StudyTime),
-		HeartRate:   round(d.HeartRate),
-		PRInterval:  round(d.PRInterval),
-		QRSDuration: round(d.QRSDuration),
-		QTInterval:  round(d.QTInterval),
-		QTcInterval: round(d.QTcInterval),
-		PAxis:       round(d.PFrontAxis),
-		QRSAxis:     round(d.QRSFrontAxis),
-		TAxis:       round(d.TFrontAxis),
+		HeartRate:   roundOpt(d.HeartRate),
+		PRInterval:  roundOpt(d.PRInterval),
+		QRSDuration: roundOpt(d.QRSDuration),
+		QTInterval:  roundOpt(d.QTInterval),
+		QTcInterval: roundOpt(d.QTcInterval),
+		PAxis:       roundOpt(d.PFrontAxis),
+		QRSAxis:     roundOpt(d.QRSFrontAxis),
+		TAxis:       roundOpt(d.TFrontAxis),
 		Filter:      filterSpec(d.FilterHPF, d.FilterLPF),
 		SampleRate:  d.SamplingRate,
 		ScaleUV:     d.Sensitivity,
@@ -117,4 +117,11 @@ func filterSpec(hpf, lpf float64) string {
 	}
 }
 
-func round(v float64) int { return int(math.Round(v)) }
+// roundOpt rounds a measurement to whole units, or returns nil when the aECG
+// document did not carry it (ParseFDA leaves those fields at zero).
+func roundOpt(v float64) *int {
+	if v == 0 {
+		return nil
+	}
+	return ecgpdf.Measured(int(math.Round(v)))
+}

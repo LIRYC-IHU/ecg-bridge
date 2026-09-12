@@ -2,6 +2,7 @@ package fdatodicom
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -52,11 +53,15 @@ type FDAData struct {
 
 	// Waveforms: lead name → samples (raw ADC integers)
 	// Key: "I", "II", ..., "V6"  (from MDC_ECG_LEAD_* code)
-	SamplingRate float64            // Hz
-	Sensitivity  float64            // µV/LSB (from SLIST_PQ scale)
-	Baseline     float64            // origin
-	Leads        map[string][]int16 // ORIGINAL (rhythm)
-	RepBeats     map[string][]int16 // DERIVED (representative beat)
+	SamplingRate float64 // Hz
+	Sensitivity  float64 // µV/LSB (from SLIST_PQ scale)
+	Baseline     float64 // origin
+	// Samples are kept as int32. aECG digits are plain integers with no width
+	// limit, and 24-bit acquisitions routinely exceed int16; narrowing here
+	// used to wrap a tall QRS into an inverted spike with nothing to show for
+	// it downstream.
+	Leads    map[string][]int32 // ORIGINAL (rhythm)
+	RepBeats map[string][]int32 // DERIVED (representative beat)
 
 	// ECG interpretation (from the MDC_ECG_INTERPRETATION annotation block)
 	InterpretationSummary    string   // overall banner (e.g. "- ECG NORMAL -")
@@ -179,14 +184,17 @@ func ParseFDA(path string) (*FDAData, error) {
 	d.FilterLPF, d.FilterHPF, d.NotchFilter = parseFilters(series.ControlVariable)
 
 	// Waveforms — iterate all top-level series
-	d.Leads = make(map[string][]int16)
-	d.RepBeats = make(map[string][]int16)
+	d.Leads = make(map[string][]int32)
+	d.RepBeats = make(map[string][]int32)
 	for si := range ecg.Component {
 		s := &ecg.Component[si].Series
 		// Rhythm waveforms from this series' direct components
 		for ci := range s.Component {
 			ss := &s.Component[ci].SequenceSet
-			sr, sens, base, leads := parseSequenceSet(ss)
+			sr, sens, base, leads, err := parseSequenceSet(ss)
+			if err != nil {
+				return nil, err
+			}
 			if sr > 0 && d.SamplingRate == 0 {
 				d.SamplingRate = sr
 			}
@@ -203,7 +211,10 @@ func ParseFDA(path string) (*FDAData, error) {
 			ds := &s.Derivation[di].DerivedSeries
 			for ci := range ds.Component {
 				ss := &ds.Component[ci].SequenceSet
-				sr, sens, base, leads := parseSequenceSet(ss)
+				sr, sens, base, leads, err := parseSequenceSet(ss)
+				if err != nil {
+					return nil, err
+				}
 				if sr > 0 && d.SamplingRate == 0 {
 					d.SamplingRate = sr
 				}
@@ -244,35 +255,42 @@ func extractSeriesAnnotations(d *FDAData, s *types.Series) {
 	}
 }
 
-// parseSequenceSet extracts sampling rate, sensitivity, baseline and lead samples
-// from a SequenceSet. Returns samplingRate=0 if no time sequence found.
-func parseSequenceSet(ss *types.SequenceSet) (samplingRate, sensitivity, baseline float64, leads map[string][]int16) {
-	leads = make(map[string][]int16)
+// parseSequenceSet extracts sampling rate, sensitivity, baseline and lead
+// samples from a SequenceSet. Returns samplingRate=0 if no time sequence found.
+//
+// Every unit carried by the file is read and honoured. Nothing is assumed: an
+// unrecognised unit is an error, because the alternative — treating it as the
+// one we expected — produces a trace that is wrong by a factor of 1000 with
+// nothing on the document to show for it.
+func parseSequenceSet(ss *types.SequenceSet) (samplingRate, sensitivity, baseline float64, leads map[string][]int32, err error) {
+	leads = make(map[string][]int32)
 	for ci := range ss.Component {
 		seq := &ss.Component[ci].Sequence
 		if seq.Code.Lead == nil {
-			// Time sequence — extract sampling rate from increment
-			if seq.Value != nil {
-				if gts, ok := seq.Value.Typed.(*types.GLIST_TS); ok {
-					if inc, err := strconv.ParseFloat(strings.TrimSpace(gts.Increment.Value), 64); err == nil && inc > 0 {
-						switch strings.TrimSpace(gts.Increment.Unit) {
-						case "ms":
-							samplingRate = 1000.0 / inc
-						default: // "s"
-							samplingRate = 1.0 / inc
-						}
-					}
-				} else if gts, ok := seq.Value.Typed.(*types.GLIST_PQ); ok {
-					if inc, err := strconv.ParseFloat(strings.TrimSpace(gts.Increment.Value), 64); err == nil && inc > 0 {
-						switch strings.TrimSpace(gts.Increment.Unit) {
-						case "ms":
-							samplingRate = 1000.0 / inc
-						default: // "s"
-							samplingRate = 1.0 / inc
-						}
-					}
-				}
+			// Time sequence — sampling rate from the increment.
+			if seq.Value == nil {
+				continue
 			}
+			// GLIST_TS and GLIST_PQ carry the increment in different structs
+			// with the same two fields, so read the fields, not the type.
+			var incValue, incUnit string
+			switch v := seq.Value.Typed.(type) {
+			case *types.GLIST_TS:
+				incValue, incUnit = v.Increment.Value, v.Increment.Unit
+			case *types.GLIST_PQ:
+				incValue, incUnit = v.Increment.Value, v.Increment.Unit
+			default:
+				continue
+			}
+			step, perr := strconv.ParseFloat(strings.TrimSpace(incValue), 64)
+			if perr != nil || step <= 0 {
+				continue
+			}
+			seconds, uerr := incrementToSeconds(step, incUnit)
+			if uerr != nil {
+				return 0, 0, 0, nil, uerr
+			}
+			samplingRate = 1.0 / seconds
 			continue
 		}
 		// Voltage sequence
@@ -283,27 +301,37 @@ func parseSequenceSet(ss *types.SequenceSet) (samplingRate, sensitivity, baselin
 		var digits []int
 		switch v := seq.Value.Typed.(type) {
 		case *types.SLIST_PQ:
-			var err error
-			digits, err = v.GetDigits()
-			if err != nil {
+			var derr error
+			digits, derr = v.GetDigits()
+			if derr != nil {
 				continue
 			}
 			if sensitivity == 0 {
-				sensitivity, _ = strconv.ParseFloat(strings.TrimSpace(v.Scale.Value), 64)
-				baseline, _ = strconv.ParseFloat(strings.TrimSpace(v.Origin.Value), 64)
+				sens, serr := quantityToMicrovolts(v.Scale)
+				if serr != nil {
+					return 0, 0, 0, nil, fmt.Errorf("lead %s scale: %w", leadName, serr)
+				}
+				base, berr := quantityToMicrovolts(v.Origin)
+				if berr != nil {
+					return 0, 0, 0, nil, fmt.Errorf("lead %s origin: %w", leadName, berr)
+				}
+				sensitivity, baseline = sens, base
 			}
 		case *types.SLIST_INT:
-			var err error
-			digits, err = v.GetDigits()
-			if err != nil {
+			var derr error
+			digits, derr = v.GetDigits()
+			if derr != nil {
 				continue
 			}
 		default:
 			continue
 		}
-		samples := make([]int16, len(digits))
+		samples := make([]int32, len(digits))
 		for i, d := range digits {
-			samples[i] = int16(d)
+			if d > math.MaxInt32 || d < math.MinInt32 {
+				return 0, 0, 0, nil, fmt.Errorf("lead %s: sample %d exceeds int32", leadName, d)
+			}
+			samples[i] = int32(d)
 		}
 		leads[leadName] = samples
 	}
@@ -582,4 +610,50 @@ func uint128Decimal(hi, lo uint64) string {
 		digits[i], digits[j] = digits[j], digits[i]
 	}
 	return string(digits)
+}
+
+// incrementToSeconds converts a time-sequence increment to seconds. aECG marks
+// the unit explicitly; an unmarked or unknown one is refused rather than
+// guessed, since a wrong time base rescales every interval on the document.
+func incrementToSeconds(value float64, unit string) (float64, error) {
+	switch strings.TrimSpace(unit) {
+	case "s":
+		return value, nil
+	case "ms":
+		return value / 1000.0, nil
+	case "us", "µs":
+		return value / 1e6, nil
+	default:
+		return 0, fmt.Errorf("unsupported time increment unit %q", unit)
+	}
+}
+
+// quantityToMicrovolts reads a voltage PhysicalQuantity and returns it in µV,
+// which is the unit the rest of this package works in. An absent or unknown
+// unit is an error: the common case is uV, and silently assuming it turns a
+// file written in mV into a trace 1000x too small.
+func quantityToMicrovolts(pq types.PhysicalQuantity) (float64, error) {
+	raw := strings.TrimSpace(pq.Value)
+	if raw == "" {
+		return 0, nil
+	}
+	value, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, fmt.Errorf("unparseable value %q", pq.Value)
+	}
+	if value == 0 {
+		return 0, nil
+	}
+	switch strings.TrimSpace(pq.Unit) {
+	case "uV", "µV", "UV":
+		return value, nil
+	case "mV", "MV":
+		return value * 1000.0, nil
+	case "V":
+		return value * 1e6, nil
+	case "":
+		return 0, fmt.Errorf("value %q carries no unit", pq.Value)
+	default:
+		return 0, fmt.Errorf("unsupported voltage unit %q", pq.Unit)
+	}
 }

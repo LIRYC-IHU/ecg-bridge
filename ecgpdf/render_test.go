@@ -3,6 +3,7 @@ package ecgpdf
 import (
 	"bytes"
 	"compress/zlib"
+	"errors"
 	"io"
 	"regexp"
 	"strings"
@@ -271,4 +272,69 @@ func TestLongInterpretationStaysInsideItsColumn(t *testing.T) {
 var statementMarkers = []string{
 	"ZZA", "ZZB", "ZZC", "ZZD", "ZZE", "ZZF",
 	"ZZG", "ZZH", "ZZI", "ZZJ", "ZZK", "ZZL",
+}
+
+// --- refusal rather than assumption ---------------------------------------
+
+// Without a gain the amplitude axis has no unit; without a sampling rate the
+// time axis has no base. Both used to fall back to a plausible constant, which
+// produced a fully calibrated-looking trace at an invented scale.
+func TestRenderRefusesWithoutAcquisitionParameters(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		mut  func(*Report)
+	}{
+		{"no amplitude scale", func(r *Report) { r.ScaleUV = 0 }},
+		{"negative amplitude scale", func(r *Report) { r.ScaleUV = -5 }},
+		{"no sampling rate", func(r *Report) { r.SampleRate = 0 }},
+		{"negative sampling rate", func(r *Report) { r.SampleRate = -1 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := sampleReport()
+			tc.mut(r)
+			var buf bytes.Buffer
+			err := Render(r, "en", &buf)
+			if !errors.Is(err, ErrMissingAcquisitionParameter) {
+				t.Fatalf("Render error = %v, want ErrMissingAcquisitionParameter", err)
+			}
+			if buf.Len() > 0 {
+				t.Error("a PDF was produced despite the refusal")
+			}
+		})
+	}
+}
+
+// A measurement the device did not report must read as absent, never as zero:
+// "0 bpm" and "PR 0 ms" are findings, not blanks.
+func TestAbsentMeasurementsRenderAsDash(t *testing.T) {
+	r := sampleReport() // all measurement fields left nil
+	text := renderText(t, r, "en")
+
+	for _, label := range []string{"Ventricular rate:", "PR interval:", "QRS duration:"} {
+		if !strings.Contains(text, label) {
+			t.Errorf("measurement row %q missing", label)
+		}
+	}
+	if strings.Contains(text, "(0)") {
+		t.Error("an unreported measurement is rendered as 0")
+	}
+}
+
+func TestReportedMeasurementsAreRendered(t *testing.T) {
+	r := sampleReport()
+	r.HeartRate = Measured(62)
+	r.PRInterval = Measured(154)
+	text := renderText(t, r, "en")
+	if !strings.Contains(text, "62") || !strings.Contains(text, "154") {
+		t.Errorf("reported measurements missing from the table:\n%s", text)
+	}
+}
+
+func TestMeasuredNonZeroTreatsZeroAsAbsent(t *testing.T) {
+	if got := MeasuredNonZero(0); got != nil {
+		t.Errorf("MeasuredNonZero(0) = %v, want nil", got)
+	}
+	if got := MeasuredNonZero(72); got == nil || *got != 72 {
+		t.Errorf("MeasuredNonZero(72) = %v, want 72", got)
+	}
 }

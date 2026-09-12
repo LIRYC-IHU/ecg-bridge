@@ -2,6 +2,7 @@ package ecgpdf
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -48,6 +49,12 @@ const (
 	calHeightMM = 1.0 * mmPerMV    // 1mV
 )
 
+// ErrMissingAcquisitionParameter is returned when the report does not carry a
+// parameter the drawing depends on. Rendering is refused rather than completed
+// from a default, because nothing on the resulting page would distinguish an
+// assumed scale from a measured one.
+var ErrMissingAcquisitionParameter = errors.New("ecgpdf: missing acquisition parameter")
+
 // lbl holds the active language's static labels. Set once at the top of Render;
 // rendering is single-shot and single-threaded.
 var lbl labels
@@ -57,15 +64,22 @@ var lbl labels
 // datetime (or a fixed epoch when unknown) so document metadata is reproducible
 // rather than wall-clock dependent.
 func Render(r *Report, lang string, w io.Writer) error {
+	// The amplitude scale and the sampling rate are what turn sample values
+	// into millimetres on paper. Without them there is no document to draw:
+	// the y axis has no unit and the x axis has no time base. They used to
+	// default to 1.25 µV/LSB and 500 Hz, which produced a confident, fully
+	// calibrated-looking trace at an invented scale. Refuse instead — a failed
+	// conversion is visible, a wrong trace is not.
+	if r.ScaleUV <= 0 {
+		return fmt.Errorf("%w: amplitude scale (µV per sample unit)", ErrMissingAcquisitionParameter)
+	}
+	if r.SampleRate <= 0 {
+		return fmt.Errorf("%w: sampling rate", ErrMissingAcquisitionParameter)
+	}
+
 	lbl = labelsFor(lang)
 	scaleUV := r.ScaleUV
-	if scaleUV == 0 {
-		scaleUV = 1.25
-	}
 	sr := r.SampleRate
-	if sr == 0 {
-		sr = 500
-	}
 
 	pdf := fpdf.New("L", "mm", "A4", "")
 	pdf.SetAutoPageBreak(false, 0)
@@ -258,6 +272,15 @@ func drawMeasurements(pdf *fpdf.Fpdf, tr func(string) string, r *Report) {
 
 	y := 40.0
 	const lh = 4.3
+	// num renders an optional measurement: the value when the source file
+	// carried one, an em dash when it did not. The renderer never prints a
+	// zero standing in for "unknown" — "0 bpm" and "PR 0 ms" read as findings.
+	num := func(v *int) string {
+		if v == nil {
+			return "—"
+		}
+		return fmt.Sprintf("%d", *v)
+	}
 	row := func(label, value, unit string) {
 		pdf.SetXY(margin, y)
 		pdf.CellFormat(46, lh, tr(label), "", 0, "L", false, 0, "")
@@ -268,11 +291,11 @@ func drawMeasurements(pdf *fpdf.Fpdf, tr func(string) string, r *Report) {
 		y += lh
 	}
 
-	row(lbl.hr, fmt.Sprintf("%d", r.HeartRate), "bpm")
-	row(lbl.prInt, fmt.Sprintf("%d", r.PRInterval), "ms")
-	row(lbl.qrsDur, fmt.Sprintf("%d", r.QRSDuration), "ms")
-	row(lbl.qtQtc, fmt.Sprintf("%d / %d", r.QTInterval, r.QTcInterval), "ms")
-	row(lbl.axis, fmt.Sprintf("%d / %d / %d", r.PAxis, r.QRSAxis, r.TAxis), "°")
+	row(lbl.hr, num(r.HeartRate), "bpm")
+	row(lbl.prInt, num(r.PRInterval), "ms")
+	row(lbl.qrsDur, num(r.QRSDuration), "ms")
+	row(lbl.qtQtc, num(r.QTInterval)+" / "+num(r.QTcInterval), "ms")
+	row(lbl.axis, num(r.PAxis)+" / "+num(r.QRSAxis)+" / "+num(r.TAxis), "°")
 	// RV5 and SV1 are reproduced as the source file carries them. Their sum is
 	// deliberately NOT computed here: RV5+SV1 is the Sokolow-Lyon voltage
 	// criterion, so deriving it would make this renderer produce a measurement
