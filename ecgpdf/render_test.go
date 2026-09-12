@@ -338,3 +338,23 @@ func TestMeasuredNonZeroTreatsZeroAsAbsent(t *testing.T) {
 		t.Errorf("MeasuredNonZero(72) = %v, want 72", got)
 	}
 }
+
+// The footer must not contradict the project's declared intended use. It used
+// to say the document was "not for diagnostic use" while the filing described
+// the same PDF as intended for reading by a health professional — a
+// contradiction a reader resolves against whichever they happen to see.
+func TestDisclaimerMatchesTheDeclaredIntendedUse(t *testing.T) {
+	text := renderText(t, sampleReport(), "en")
+
+	for _, want := range []string{
+		"no measurement and no interpretation",
+		"Does not replace the acquisition device",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("footer does not carry %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "Not for diagnostic use") {
+		t.Error("footer still carries the wording that contradicts the declared intended use")
+	}
+}
