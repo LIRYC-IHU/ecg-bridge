@@ -45,7 +45,10 @@ func ParseFile(dat []byte) (*FukudaData, error) {
 	fillDemographics(dat, &fd.Patient)
 
 	startBit := (mk + 44) * 8
-	decoded := DecodeAll(dat, startBit, nLeads, nSamples)
+	decoded, err := DecodeAll(dat, startBit, nLeads, nSamples)
+	if err != nil {
+		return nil, err
+	}
 	fd.Leads = make(map[string][]int32, nLeads)
 	for i := 0; i < nLeads; i++ {
 		fd.Leads[leadOrder[i]] = decoded[i]

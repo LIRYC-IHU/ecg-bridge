@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/LIRYC-IHU/ecg-bridge/fixtures"
+
 	philipstodicom "github.com/LIRYC-IHU/ecg-bridge/philips-to-dicom"
 	philipstofda "github.com/LIRYC-IHU/ecg-bridge/philips-to-fda"
 )
@@ -41,7 +43,7 @@ func firstXML(dir string) string {
 func patients(t *testing.T) []string {
 	t.Helper()
 	if _, err := os.Stat(philipsDataDir); err != nil {
-		t.Skipf("Philips data not available: %v", err)
+		fixtures.Require(t, "Philips SierraECG recordings", "Philips XLI decode and aECG conversion")
 	}
 	entries, err := os.ReadDir(philipsDataDir)
 	if err != nil {
@@ -82,7 +84,7 @@ func TestConvertAll(t *testing.T) {
 func TestConvertOutputIsValidXML(t *testing.T) {
 	dir := xmlDir("BS1170")
 	if dir == "" {
-		t.Skip("BS1170 not available")
+		fixtures.Require(t, "BS1170", "Philips XLI decode and aECG conversion")
 	}
 	xmlFile := firstXML(dir)
 	out := filepath.Join(t.TempDir(), "out.xml")
@@ -103,7 +105,7 @@ func TestConvertOutputIsValidXML(t *testing.T) {
 func TestAnnotations(t *testing.T) {
 	dir := xmlDir("BS1170")
 	if dir == "" {
-		t.Skip("BS1170 not available")
+		fixtures.Require(t, "BS1170", "Philips XLI decode and aECG conversion")
 	}
 	xmlFile := firstXML(dir)
 	data, err := philipstodicom.ParsePhilips(xmlFile)
@@ -156,7 +158,7 @@ func TestInterpretationFields(t *testing.T) {
 		t.Run(tc.patient, func(t *testing.T) {
 			dir := xmlDir(tc.patient)
 			if dir == "" {
-				t.Skipf("%s not available", tc.patient)
+				fixtures.Require(t, tc.patient, "Philips interpretation field extraction")
 			}
 			xmlFile := firstXML(dir)
 			out := filepath.Join(t.TempDir(), "out.xml")
@@ -198,7 +200,7 @@ func TestParseInterpretationFields(t *testing.T) {
 		t.Run(tc.patient, func(t *testing.T) {
 			dir := xmlDir(tc.patient)
 			if dir == "" {
-				t.Skipf("%s not available", tc.patient)
+				fixtures.Require(t, tc.patient, "Philips interpretation field extraction")
 			}
 			xmlFile := firstXML(dir)
 			d, err := philipstodicom.ParsePhilips(xmlFile)
@@ -219,7 +221,7 @@ func TestParseInterpretationFields(t *testing.T) {
 func TestWaveformPresent(t *testing.T) {
 	dir := xmlDir("BS1170")
 	if dir == "" {
-		t.Skip("BS1170 not available")
+		fixtures.Require(t, "BS1170", "Philips XLI decode and aECG conversion")
 	}
 	xmlFile := firstXML(dir)
 	out := filepath.Join(t.TempDir(), "out.xml")
@@ -242,7 +244,7 @@ func TestWaveformPresent(t *testing.T) {
 func TestFilterValues(t *testing.T) {
 	dir := xmlDir("BS1170")
 	if dir == "" {
-		t.Skip("BS1170 not available")
+		fixtures.Require(t, "BS1170", "Philips XLI decode and aECG conversion")
 	}
 	xmlFile := firstXML(dir)
 	out := filepath.Join(t.TempDir(), "out.xml")

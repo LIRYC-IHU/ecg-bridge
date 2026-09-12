@@ -3,6 +3,8 @@ package fukudatofda
 import (
 	"os"
 	"testing"
+
+	"github.com/LIRYC-IHU/ecg-bridge/fixtures"
 )
 
 // leadIHead is the first 16 samples of lead I decoded from testdata/DATA000.ECG,
@@ -12,7 +14,7 @@ var leadIHead = []int32{-26, -25, -24, -23, -21, -20, -19, -18, -17, -16, -15, -
 func TestParseDATA000(t *testing.T) {
 	dat, err := os.ReadFile("testdata/DATA000.ECG")
 	if os.IsNotExist(err) {
-		t.Skip("testdata/DATA000.ECG not present (patient recording, not shipped)")
+		fixtures.Require(t, "testdata/DATA000.ECG", "Fukuda Huffman decode against the paired MFER reference")
 	}
 	if err != nil {
 		t.Fatalf("read testdata: %v", err)
@@ -69,7 +71,7 @@ func TestDeriveLeads(t *testing.T) {
 func TestMeasurementsDATA004(t *testing.T) {
 	dat, err := os.ReadFile("testdata/DATA004.ECG")
 	if os.IsNotExist(err) {
-		t.Skip("testdata/DATA004.ECG not present (patient recording, not shipped)")
+		fixtures.Require(t, "testdata/DATA004.ECG", "Fukuda measurement extraction")
 	}
 	if err != nil {
 		t.Fatalf("read testdata: %v", err)
@@ -80,8 +82,8 @@ func TestMeasurementsDATA004(t *testing.T) {
 	}
 	m := fd.Measurement
 	for _, c := range []struct {
-		name       string
-		got, want  int
+		name      string
+		got, want int
 	}{
 		{"HeartRate", m.HeartRate, 67},
 		{"PRInterval", m.PRInterval, 150},

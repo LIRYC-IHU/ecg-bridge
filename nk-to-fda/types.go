@@ -82,25 +82,25 @@ type PatientData struct {
 	DeviceModel string    // from SYSTEM section (e.g. "2350K")
 
 	// Clinical context entered at acquisition (free text, may be empty).
-	Age           string // age in years
-	Height        string // height in cm
-	Weight        string // weight in kg
-	BloodPressure string // blood pressure "systolic diastolic" (mmHg)
-	Medications []string // current medications
-	History     string   // clinical history
-	Symptoms    string   // presenting symptoms
+	Age           string   // age in years
+	Height        string   // height in cm
+	Weight        string   // weight in kg
+	BloodPressure string   // blood pressure "systolic diastolic" (mmHg)
+	Medications   []string // current medications
+	History       string   // clinical history
+	Symptoms      string   // presenting symptoms
 }
 
 // MeasurementData holds analytical ECG measurements from MEASUREMENT section.
 type MeasurementData struct {
-	HeartRate    int     // bpm, 0 = not set
-	PRInterval   int     // ms
-	QRSDuration  int     // ms
-	QTInterval   int     // ms
-	QTcInterval  int     // ms
-	PAxis        int     // deg, includes sign
-	QRSAxis      int     // deg, includes sign
-	TAxis        int     // deg, includes sign
+	HeartRate    int // bpm, 0 = not set
+	PRInterval   int // ms
+	QRSDuration  int // ms
+	QTInterval   int // ms
+	QTcInterval  int // ms
+	PAxis        int // deg, includes sign
+	QRSAxis      int // deg, includes sign
+	TAxis        int // deg, includes sign
 	HasPAxis     bool
 	HasQRSAxis   bool
 	HasTAxis     bool

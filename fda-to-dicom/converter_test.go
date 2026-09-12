@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/LIRYC-IHU/ecg-bridge/fixtures"
+
 	"github.com/LIRYC-IHU/hl7v3-aecg/hl7aecg/types"
 	"github.com/suyashkumar/dicom"
 	"github.com/suyashkumar/dicom/pkg/tag"
@@ -30,7 +32,7 @@ var testPatients = []string{
 func requireFDADir(t *testing.T) {
 	t.Helper()
 	if _, err := os.Stat(testFDADir); os.IsNotExist(err) {
-		t.Skip("FDA test data not available (data_test/fda not present)")
+		fixtures.Require(t, "data_test/fda", "aECG parsing against real documents")
 	}
 }
 
@@ -71,7 +73,7 @@ func TestParseMetadata(t *testing.T) {
 // TestParseInstitutionAndSerial checks InstitutionName and SerialNumber from a Mindray FDA XML.
 func TestParseInstitutionAndSerial(t *testing.T) {
 	if _, err := os.Stat(testMindrayXML); os.IsNotExist(err) {
-		t.Skip("Mindray test file not found")
+		fixtures.Require(t, "the Mindray aECG sample", "institution/serial extraction and DICOM device fields")
 	}
 	d, err := ParseFDA(testMindrayXML)
 	if err != nil {
@@ -192,7 +194,7 @@ func TestParseRepBeats(t *testing.T) {
 // TestDICOMDeviceSerial checks that (0018,1000) DeviceSerialNumber is written.
 func TestDICOMDeviceSerial(t *testing.T) {
 	if _, err := os.Stat(testMindrayXML); os.IsNotExist(err) {
-		t.Skip("Mindray test file not found")
+		fixtures.Require(t, "the Mindray aECG sample", "institution/serial extraction and DICOM device fields")
 	}
 	output := filepath.Join(t.TempDir(), "mindray.dcm")
 	if err := Convert(testMindrayXML, output, false, nil); err != nil {
@@ -326,7 +328,7 @@ func TestConvertAll(t *testing.T) {
 func TestWaveformCorrelation(t *testing.T) {
 	requireFDADir(t)
 	if _, err := os.Stat(refDICOMBase); os.IsNotExist(err) {
-		t.Skip("reference DICOM volume not mounted")
+		fixtures.Require(t, "the reference DICOM volume", "waveform correlation against the vendor DICOM export")
 	}
 
 	for _, patient := range testPatients {

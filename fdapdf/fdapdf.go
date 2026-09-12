@@ -2,10 +2,7 @@
 // ecgpdf.Report. Because every converter in this repo can emit FDA aECG XML,
 // this is the single "via FDA" path to a PDF: a vendor front-end converts to
 // FDA, then this package renders it — no per-vendor PDF code required.
-//
-// Note: the current FDA parser (fda-to-dicom.ParseFDA) does not expose the
-// interpretive statement list, so reports produced through this path carry no
-// interpretation text yet.
+
 package fdapdf
 
 import (
