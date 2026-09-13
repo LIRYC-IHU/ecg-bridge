@@ -61,13 +61,16 @@ others' amplitudes silently halved or doubled.
 The two are easy to confuse and worth separating: applying each lead's own
 µV/LSB is precisely what allows every lead to be drawn at the same mm/mV.
 
-- **aECG read path: fixed.** Per-lead scales are carried from
-  `parseSequenceSet` through `FDAData.LeadSensitivity` and
+- **aECG read path: fixed, and covered end to end.** Per-lead scales are carried
+  from `parseSequenceSet` through `FDAData.LeadSensitivity` and
   `ecgpdf.Report.ScaleUVByLead` to the renderer, and to the DICOM builder's
-  normalisation. `TestPerLeadScaleRendersTheSameVoltageIdentically` asserts the
-  property that matters — the same voltage expressed at a different
-  digitisation scale renders identically — with a companion test proving that
-  comparison is sensitive to amplitude at all.
+  normalisation.
+
+  The chain is pinned by `fdapdf.TestPerLeadScaleSurvivesTheWholeChain`, which
+  renders two synthetic aECG fixtures describing the same recording — one with
+  V1 at 5 µV/LSB, the other at 2.5 µV/LSB carrying twice the digits — and
+  requires identical output. Unit tests at either end are not enough: before
+  this test existed, severing either join left the whole suite green.
 - **MUSE write path: still refused** (`ErrPerLeadScale`). The aECG writer used
   here takes one scale per series and cannot express more, so the conversion
   genuinely cannot represent such a recording. Lifting it needs a per-lead
