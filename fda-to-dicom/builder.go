@@ -149,12 +149,20 @@ func buildWaveformItem(d *FDAData, originality, label string, leads map[string][
 	}
 	scaledLeads := make([][]int16, len(orderedLeads))
 	for i, lead := range orderedLeads {
+		// Each lead is normalised with its OWN scale. aECG states the scale per
+		// lead, and using the document's reference scale for all of them would
+		// rescale any lead recorded at a different gain — half-gain precordials
+		// being the case that occurs in practice.
+		sensitivity := d.Sensitivity
+		if s, ok := d.LeadSensitivity[leadOrder[i]]; ok && s > 0 {
+			sensitivity = s
+		}
 		scaledLeads[i] = make([]int16, len(lead))
 		for j, v := range lead {
 			// DICOM WaveformBitsAllocated is 16 below, so a sample that does
 			// not fit is a real limit of this output format, not something to
 			// wrap silently into an inverted spike.
-			uv := float64(v)*d.Sensitivity + d.Baseline
+			uv := float64(v)*sensitivity + d.Baseline
 			if uv > math.MaxInt16 || uv < math.MinInt16 {
 				return nil, fmt.Errorf("%w: sample %.0f µV exceeds the 16-bit DICOM waveform range", ErrSampleOutOfRange, uv)
 			}

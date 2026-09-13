@@ -389,3 +389,90 @@ func TestConfirmedIdentityCarriesNoNotice(t *testing.T) {
 		t.Error("a confirmed identity is marked as unconfirmed")
 	}
 }
+
+// --- per-lead amplitude scale ----------------------------------------------
+
+// tenSecondReport carries a full 10 s recording, so every column of the 3x4
+// layout actually draws. sampleReport() holds one second, which leaves columns
+// 2 to 4 empty — enough for the header assertions above, useless for anything
+// that compares drawn amplitudes.
+func tenSecondReport(t *testing.T) *Report {
+	t.Helper()
+	const n = 5000 // 10 s at 500 Hz
+	r := sampleReport()
+	for name := range r.Leads {
+		lead := make([]int32, n)
+		for i := range lead {
+			lead[i] = int32((i % 97) - 48)
+		}
+		r.Leads[name] = lead
+	}
+	return r
+}
+
+// v1Ramp fills lead V1 with a distinguishable ramp scaled by factor.
+func v1Ramp(r *Report, factor int32) {
+	lead := make([]int32, len(r.Leads["V1"]))
+	for i := range lead {
+		lead[i] = int32((i%50)-25) * factor
+	}
+	r.Leads["V1"] = lead
+}
+
+// The property that matters: a lead digitised at half the µV/LSB, carrying
+// twice the digits, represents the same voltage and must draw identically.
+//
+// Two reports differing only in how lead V1's amplitude is expressed must
+// therefore produce the same page. Before per-lead scales were carried through,
+// the second rendered V1 at half amplitude, because the document's reference
+// scale was applied to every lead.
+func TestPerLeadScaleRendersTheSameVoltageIdentically(t *testing.T) {
+	base := tenSecondReport(t)
+	v1Ramp(base, 1)
+
+	halfGain := tenSecondReport(t)
+	v1Ramp(halfGain, 2)                                                 // twice the digits…
+	halfGain.ScaleUVByLead = map[string]float64{"V1": base.ScaleUV / 2} // …at half the scale
+
+	if renderText(t, base, "en") != renderText(t, halfGain, "en") {
+		t.Error("the same voltage expressed at a different digitisation scale does not render identically")
+	}
+}
+
+// Guard the guard: without the per-lead scale the two must differ, or the test
+// above proves nothing. It caught exactly that — the first version used
+// sampleReport(), whose one second of signal leaves V1's column empty, so both
+// pages were identical because neither drew V1 at all.
+func TestPerLeadScaleActuallyChangesTheOutput(t *testing.T) {
+	base := tenSecondReport(t)
+	v1Ramp(base, 1)
+
+	unscaled := tenSecondReport(t)
+	v1Ramp(unscaled, 2)
+
+	if renderText(t, base, "en") == renderText(t, unscaled, "en") {
+		t.Error("doubling a lead's digits changed nothing; the comparison is not sensitive to amplitude")
+	}
+}
+
+func TestScaleForFallsBackToTheDocumentScale(t *testing.T) {
+	r := sampleReport()
+	r.ScaleUVByLead = map[string]float64{"V1": 2.5}
+
+	if got := r.scaleFor("V1", r.ScaleUV); got != 2.5 {
+		t.Errorf("scaleFor(V1) = %v, want the lead's own 2.5", got)
+	}
+	if got := r.scaleFor("II", r.ScaleUV); got != r.ScaleUV {
+		t.Errorf("scaleFor(II) = %v, want the document scale %v", got, r.ScaleUV)
+	}
+}
+
+func TestRenderRefusesNonPositivePerLeadScale(t *testing.T) {
+	r := sampleReport()
+	r.ScaleUVByLead = map[string]float64{"V3": 0}
+
+	var buf bytes.Buffer
+	if err := Render(r, "en", &buf); !errors.Is(err, ErrMissingAcquisitionParameter) {
+		t.Fatalf("Render error = %v, want ErrMissingAcquisitionParameter", err)
+	}
+}

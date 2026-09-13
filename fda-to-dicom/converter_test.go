@@ -643,15 +643,15 @@ func TestBuildRefusesMissingSensitivity(t *testing.T) {
 func TestParseSequenceSetKeepsSamplesWiderThanInt16(t *testing.T) {
 	ss := leadSequenceSet("MDC_ECG_LEAD_I", "5", "uV", "0 40000 -40000 100")
 
-	_, sens, _, leads, err := parseSequenceSet(ss)
+	seq, err := parseSequenceSet(ss)
 	if err != nil {
 		t.Fatalf("parseSequenceSet: %v", err)
 	}
-	if sens != 5 {
-		t.Errorf("sensitivity = %v µV/LSB, want 5", sens)
+	if seq.sensitivity != 5 {
+		t.Errorf("sensitivity = %v µV/LSB, want 5", seq.sensitivity)
 	}
 	want := []int32{0, 40000, -40000, 100}
-	got := leads["I"]
+	got := seq.leads["I"]
 	if len(got) != len(want) {
 		t.Fatalf("lead I has %d samples, want %d", len(got), len(want))
 	}
@@ -668,22 +668,22 @@ func TestParseSequenceSetHonoursScaleUnit(t *testing.T) {
 	inUV := leadSequenceSet("MDC_ECG_LEAD_I", "5", "uV", "1 2 3")
 	inMV := leadSequenceSet("MDC_ECG_LEAD_I", "0.005", "mV", "1 2 3")
 
-	_, sensUV, _, _, err := parseSequenceSet(inUV)
+	uv, err := parseSequenceSet(inUV)
 	if err != nil {
 		t.Fatalf("uV: %v", err)
 	}
-	_, sensMV, _, _, err := parseSequenceSet(inMV)
+	mv, err := parseSequenceSet(inMV)
 	if err != nil {
 		t.Fatalf("mV: %v", err)
 	}
-	if math.Abs(sensUV-sensMV) > 1e-9 {
-		t.Errorf("same scale expressed in uV (%v) and mV (%v) disagree", sensUV, sensMV)
+	if math.Abs(uv.sensitivity-mv.sensitivity) > 1e-9 {
+		t.Errorf("same scale expressed in uV (%v) and mV (%v) disagree", uv.sensitivity, mv.sensitivity)
 	}
 }
 
 func TestParseSequenceSetRefusesUnmarkedScale(t *testing.T) {
 	ss := leadSequenceSet("MDC_ECG_LEAD_I", "5", "", "1 2 3")
-	if _, _, _, _, err := parseSequenceSet(ss); err == nil {
+	if _, err := parseSequenceSet(ss); err == nil {
 		t.Error("a scale with no unit was accepted; it used to be assumed to be uV")
 	}
 }
@@ -705,21 +705,32 @@ func leadSequenceSet(leadCode, scaleValue, scaleUnit, digits string) *types.Sequ
 	}
 }
 
-// IHE CARD TF-2 §4.6.4.2.2.4: when leads carry different gains — precordial
-// leads at half gain is the case the profile names — the document must give
-// enough information to determine each lead's gain. This model holds one scale,
-// so a document that needs more than one is refused rather than rendered at the
-// first lead's gain, which would halve or double the precordial amplitudes on a
-// page declaring a single calibration.
-func TestParseSequenceSetRefusesPerLeadScales(t *testing.T) {
+// aECG states the amplitude scale per lead and does not require the leads to
+// agree — precordial leads recorded at half gain is the case that occurs. Each
+// lead's own scale must survive parsing: collapsing them onto the first lead's
+// value silently halves or doubles the others' amplitudes.
+//
+// Note this is a digitisation scale, not a display gain. Applying each lead's
+// own µV/LSB is precisely what lets the renderer draw every lead at the same
+// mm/mV.
+func TestParseSequenceSetKeepsPerLeadScales(t *testing.T) {
 	ss := &types.SequenceSet{Component: []types.SequenceComponent{
 		leadComponent("MDC_ECG_LEAD_I", "5", "uV", "1 2 3"),
 		leadComponent("MDC_ECG_LEAD_V1", "2.5", "uV", "1 2 3"), // half gain
 	}}
 
-	_, _, _, _, err := parseSequenceSet(ss)
-	if !errors.Is(err, ErrPerLeadScale) {
-		t.Fatalf("error = %v, want ErrPerLeadScale", err)
+	seq, err := parseSequenceSet(ss)
+	if err != nil {
+		t.Fatalf("parseSequenceSet: %v", err)
+	}
+	if got := seq.leadScale["I"]; got != 5 {
+		t.Errorf("lead I scale = %v, want 5", got)
+	}
+	if got := seq.leadScale["V1"]; got != 2.5 {
+		t.Errorf("lead V1 scale = %v, want 2.5 — the second lead's scale was discarded", got)
+	}
+	if seq.sensitivity != 5 {
+		t.Errorf("reference scale = %v, want the first lead's 5", seq.sensitivity)
 	}
 }
 
@@ -730,15 +741,15 @@ func TestParseSequenceSetAcceptsUniformScales(t *testing.T) {
 		leadComponent("MDC_ECG_LEAD_V1", "5", "uV", "4 5 6"),
 	}}
 
-	_, sens, _, leads, err := parseSequenceSet(ss)
+	seq, err := parseSequenceSet(ss)
 	if err != nil {
 		t.Fatalf("parseSequenceSet: %v", err)
 	}
-	if sens != 5 {
-		t.Errorf("sensitivity = %v, want 5", sens)
+	if seq.sensitivity != 5 {
+		t.Errorf("sensitivity = %v, want 5", seq.sensitivity)
 	}
-	if len(leads) != 2 {
-		t.Errorf("got %d leads, want 2", len(leads))
+	if len(seq.leads) != 2 {
+		t.Errorf("got %d leads, want 2", len(seq.leads))
 	}
 }
 
@@ -750,7 +761,7 @@ func TestParseSequenceSetComparesScalesAfterUnitConversion(t *testing.T) {
 		leadComponent("MDC_ECG_LEAD_V1", "0.005", "mV", "4 5 6"),
 	}}
 
-	if _, _, _, _, err := parseSequenceSet(ss); err != nil {
+	if _, err := parseSequenceSet(ss); err != nil {
 		t.Fatalf("equal scales in different units were rejected: %v", err)
 	}
 }

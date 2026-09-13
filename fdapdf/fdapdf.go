@@ -41,6 +41,16 @@ func FromFDA(d *fdatodicom.FDAData) *ecgpdf.Report {
 		model = d.Manufacturer
 	}
 
+	// Carry each lead's own amplitude scale. Collapsing them onto the document's
+	// reference scale would rescale any lead recorded at a different gain.
+	var leadScale map[string]float64
+	if len(d.LeadSensitivity) > 0 {
+		leadScale = make(map[string]float64, len(d.LeadSensitivity))
+		for name, s := range d.LeadSensitivity {
+			leadScale[name] = s
+		}
+	}
+
 	var sts []ecgpdf.Statement
 	if s := strings.TrimSpace(d.InterpretationSummary); s != "" {
 		sts = append(sts, ecgpdf.Statement{Text: s, Emphasis: true})
@@ -55,28 +65,29 @@ func FromFDA(d *fdatodicom.FDAData) *ecgpdf.Report {
 	}
 
 	return &ecgpdf.Report{
-		PatientID:   d.PatientID,
-		Name:        strings.TrimSpace(strings.ReplaceAll(d.PatientName, "^", " ")),
-		Sex:         d.PatientSex,
-		BirthDate:   d.PatientDOB,
-		Age:         normalizeAge(d.PatientAge),
-		DeviceModel: model,
-		Department:  d.InstitutionName,
-		Operator:    d.OperatorID,
-		RecordingAt: studyTime(d.StudyDate, d.StudyTime),
-		HeartRate:   roundOpt(d.HeartRate),
-		PRInterval:  roundOpt(d.PRInterval),
-		QRSDuration: roundOpt(d.QRSDuration),
-		QTInterval:  roundOpt(d.QTInterval),
-		QTcInterval: roundOpt(d.QTcInterval),
-		PAxis:       roundOpt(d.PFrontAxis),
-		QRSAxis:     roundOpt(d.QRSFrontAxis),
-		TAxis:       roundOpt(d.TFrontAxis),
-		Filter:      filterSpec(d.FilterHPF, d.FilterLPF),
-		SampleRate:  d.SamplingRate,
-		ScaleUV:     d.Sensitivity,
-		Leads:       leadMap,
-		Statements:  sts,
+		PatientID:     d.PatientID,
+		Name:          strings.TrimSpace(strings.ReplaceAll(d.PatientName, "^", " ")),
+		Sex:           d.PatientSex,
+		BirthDate:     d.PatientDOB,
+		Age:           normalizeAge(d.PatientAge),
+		DeviceModel:   model,
+		Department:    d.InstitutionName,
+		Operator:      d.OperatorID,
+		RecordingAt:   studyTime(d.StudyDate, d.StudyTime),
+		HeartRate:     roundOpt(d.HeartRate),
+		PRInterval:    roundOpt(d.PRInterval),
+		QRSDuration:   roundOpt(d.QRSDuration),
+		QTInterval:    roundOpt(d.QTInterval),
+		QTcInterval:   roundOpt(d.QTcInterval),
+		PAxis:         roundOpt(d.PFrontAxis),
+		QRSAxis:       roundOpt(d.QRSFrontAxis),
+		TAxis:         roundOpt(d.TFrontAxis),
+		Filter:        filterSpec(d.FilterHPF, d.FilterLPF),
+		SampleRate:    d.SamplingRate,
+		ScaleUV:       d.Sensitivity,
+		ScaleUVByLead: leadScale,
+		Leads:         leadMap,
+		Statements:    sts,
 	}
 }
 

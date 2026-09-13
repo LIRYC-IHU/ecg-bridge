@@ -154,12 +154,16 @@ func parseWaveforms(d *MuseData, waveforms []museWaveform) error {
 			}
 		}
 
-		// MUSE states LeadAmplitudeUnitsPerBit per lead, and this model holds
-		// one amplitude scale. Reading the first lead's value and ignoring the
-		// rest is only safe while they agree; where they do not — precordial
-		// leads at half gain is the documented case — applying lead I's gain
-		// to V1..V6 silently halves or doubles those amplitudes on a document
-		// that declares a single calibration. Refused instead.
+		// MUSE states LeadAmplitudeUnitsPerBit per lead, and so does aECG — but
+		// the aECG writer used here (hl7v3-aecg AddRhythmSeries) takes one
+		// scale for the whole series and cannot express more. So unlike the
+		// aECG read path, which now carries per-lead scales end to end, this
+		// conversion genuinely cannot represent a recording whose leads differ.
+		//
+		// Refused rather than written at the first lead's scale, which would
+		// silently halve or double the others' amplitudes in the output file
+		// and in everything rendered from it. Lifting this needs a per-lead
+		// scale in hl7v3-aecg.
 		for _, ld := range w.Leads {
 			sens := atof(ld.AmplitudeUnitsPerBit)
 			if sens == 0 {

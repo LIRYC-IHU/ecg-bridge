@@ -1,7 +1,6 @@
 package fdatodicom
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -55,8 +54,15 @@ type FDAData struct {
 	// Waveforms: lead name → samples (raw ADC integers)
 	// Key: "I", "II", ..., "V6"  (from MDC_ECG_LEAD_* code)
 	SamplingRate float64 // Hz
-	Sensitivity  float64 // µV/LSB (from SLIST_PQ scale)
-	Baseline     float64 // origin
+	// Sensitivity is the reference amplitude scale in µV/LSB: the first lead's,
+	// and the only one for the overwhelming majority of documents.
+	Sensitivity float64
+	// LeadSensitivity holds each lead's own scale in µV/LSB. aECG states the
+	// scale per lead and does not require the leads to agree, so a single value
+	// cannot represent every document. Consumers must prefer this map and fall
+	// back to Sensitivity only for leads absent from it.
+	LeadSensitivity map[string]float64
+	Baseline        float64 // origin
 	// Samples are kept as int32. aECG digits are plain integers with no width
 	// limit, and 24-bit acquisitions routinely exceed int16; narrowing here
 	// used to wrap a tall QRS into an inverted spike with nothing to show for
@@ -187,24 +193,28 @@ func ParseFDA(path string) (*FDAData, error) {
 	// Waveforms — iterate all top-level series
 	d.Leads = make(map[string][]int32)
 	d.RepBeats = make(map[string][]int32)
+	d.LeadSensitivity = make(map[string]float64)
 	for si := range ecg.Component {
 		s := &ecg.Component[si].Series
 		// Rhythm waveforms from this series' direct components
 		for ci := range s.Component {
 			ss := &s.Component[ci].SequenceSet
-			sr, sens, base, leads, err := parseSequenceSet(ss)
+			seq, err := parseSequenceSet(ss)
 			if err != nil {
 				return nil, err
 			}
-			if sr > 0 && d.SamplingRate == 0 {
-				d.SamplingRate = sr
+			if seq.samplingRate > 0 && d.SamplingRate == 0 {
+				d.SamplingRate = seq.samplingRate
 			}
-			if sens > 0 && d.Sensitivity == 0 {
-				d.Sensitivity = sens
-				d.Baseline = base
+			if seq.sensitivity > 0 && d.Sensitivity == 0 {
+				d.Sensitivity = seq.sensitivity
+				d.Baseline = seq.baseline
 			}
-			for k, v := range leads {
+			for k, v := range seq.leads {
 				d.Leads[k] = v
+			}
+			for k, v := range seq.leadScale {
+				d.LeadSensitivity[k] = v
 			}
 		}
 		// Representative beat waveforms from derivation
@@ -212,18 +222,18 @@ func ParseFDA(path string) (*FDAData, error) {
 			ds := &s.Derivation[di].DerivedSeries
 			for ci := range ds.Component {
 				ss := &ds.Component[ci].SequenceSet
-				sr, sens, base, leads, err := parseSequenceSet(ss)
+				seq, err := parseSequenceSet(ss)
 				if err != nil {
 					return nil, err
 				}
-				if sr > 0 && d.SamplingRate == 0 {
-					d.SamplingRate = sr
+				if seq.samplingRate > 0 && d.SamplingRate == 0 {
+					d.SamplingRate = seq.samplingRate
 				}
-				if sens > 0 && d.Sensitivity == 0 {
-					d.Sensitivity = sens
-					d.Baseline = base
+				if seq.sensitivity > 0 && d.Sensitivity == 0 {
+					d.Sensitivity = seq.sensitivity
+					d.Baseline = seq.baseline
 				}
-				for k, v := range leads {
+				for k, v := range seq.leads {
 					d.RepBeats[k] = v
 				}
 			}
@@ -256,15 +266,32 @@ func extractSeriesAnnotations(d *FDAData, s *types.Series) {
 	}
 }
 
-// parseSequenceSet extracts sampling rate, sensitivity, baseline and lead
-// samples from a SequenceSet. Returns samplingRate=0 if no time sequence found.
+// sequenceData is one parsed SequenceSet: the time base, the lead samples, and
+// the amplitude scale of each lead.
+type sequenceData struct {
+	samplingRate float64
+	// sensitivity is the first lead's scale, kept as the document's reference.
+	sensitivity float64
+	baseline    float64
+	// leadScale holds every lead's own scale in µV/LSB. aECG states it per
+	// lead and does not require the leads to agree; collapsing them to the
+	// first would rescale the others' amplitudes silently.
+	leadScale map[string]float64
+	leads     map[string][]int32
+}
+
+// parseSequenceSet extracts the time base, per-lead amplitude scales and lead
+// samples from a SequenceSet.
 //
 // Every unit carried by the file is read and honoured. Nothing is assumed: an
 // unrecognised unit is an error, because the alternative — treating it as the
 // one we expected — produces a trace that is wrong by a factor of 1000 with
 // nothing on the document to show for it.
-func parseSequenceSet(ss *types.SequenceSet) (samplingRate, sensitivity, baseline float64, leads map[string][]int32, err error) {
-	leads = make(map[string][]int32)
+func parseSequenceSet(ss *types.SequenceSet) (sequenceData, error) {
+	out := sequenceData{
+		leadScale: make(map[string]float64),
+		leads:     make(map[string][]int32),
+	}
 	for ci := range ss.Component {
 		seq := &ss.Component[ci].Sequence
 		if seq.Code.Lead == nil {
@@ -289,9 +316,9 @@ func parseSequenceSet(ss *types.SequenceSet) (samplingRate, sensitivity, baselin
 			}
 			seconds, uerr := incrementToSeconds(step, incUnit)
 			if uerr != nil {
-				return 0, 0, 0, nil, uerr
+				return sequenceData{}, uerr
 			}
-			samplingRate = 1.0 / seconds
+			out.samplingRate = 1.0 / seconds
 			continue
 		}
 		// Voltage sequence
@@ -309,28 +336,17 @@ func parseSequenceSet(ss *types.SequenceSet) (samplingRate, sensitivity, baselin
 			}
 			sens, serr := quantityToMicrovolts(v.Scale)
 			if serr != nil {
-				return 0, 0, 0, nil, fmt.Errorf("lead %s scale: %w", leadName, serr)
+				return sequenceData{}, fmt.Errorf("lead %s scale: %w", leadName, serr)
 			}
 			base, berr := quantityToMicrovolts(v.Origin)
 			if berr != nil {
-				return 0, 0, 0, nil, fmt.Errorf("lead %s origin: %w", leadName, berr)
+				return sequenceData{}, fmt.Errorf("lead %s origin: %w", leadName, berr)
 			}
-			// aECG carries a scale per lead, and this model holds one. Taking
-			// the first and ignoring the rest is only safe while they agree —
-			// and the case where they do not is the documented one: precordial
-			// leads recorded at half gain. Applying lead I's gain to V1..V6
-			// would halve or double those amplitudes on a document that
-			// declares a single calibration, with nothing to show for it.
-			//
-			// Refused rather than rendered. Supporting per-lead gains properly
-			// means carrying them through to the renderer and stating each on
-			// the document (IHE CARD TF-2 §4.6.4.2.2.4); until then, a file
-			// that needs it must not be silently mis-scaled.
-			if sensitivity == 0 {
-				sensitivity, baseline = sens, base
-			} else if sens != sensitivity {
-				return 0, 0, 0, nil, fmt.Errorf("%w: lead %s is scaled at %g µV/LSB where an earlier lead is at %g µV/LSB",
-					ErrPerLeadScale, leadName, sens, sensitivity)
+			if sens > 0 {
+				out.leadScale[leadName] = sens
+			}
+			if out.sensitivity == 0 {
+				out.sensitivity, out.baseline = sens, base
 			}
 		case *types.SLIST_INT:
 			var derr error
@@ -344,13 +360,13 @@ func parseSequenceSet(ss *types.SequenceSet) (samplingRate, sensitivity, baselin
 		samples := make([]int32, len(digits))
 		for i, d := range digits {
 			if d > math.MaxInt32 || d < math.MinInt32 {
-				return 0, 0, 0, nil, fmt.Errorf("lead %s: sample %d exceeds int32", leadName, d)
+				return sequenceData{}, fmt.Errorf("lead %s: sample %d exceeds int32", leadName, d)
 			}
 			samples[i] = int32(d)
 		}
-		leads[leadName] = samples
+		out.leads[leadName] = samples
 	}
-	return
+	return out, nil
 }
 
 // leadCodeToName converts a MDC_ECG_LEAD_* code to a short name like "I", "V1".
@@ -642,11 +658,6 @@ func incrementToSeconds(value float64, unit string) (float64, error) {
 		return 0, fmt.Errorf("unsupported time increment unit %q", unit)
 	}
 }
-
-// ErrPerLeadScale is returned when a document scales its leads differently.
-// The model here holds one amplitude scale for the whole recording, so such a
-// document cannot be represented faithfully and is refused.
-var ErrPerLeadScale = errors.New("fda-to-dicom: per-lead amplitude scales")
 
 // quantityToMicrovolts reads a voltage PhysicalQuantity and returns it in µV,
 // which is the unit the rest of this package works in. An absent or unknown

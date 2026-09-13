@@ -32,7 +32,7 @@ retrieved. `ecgpdf/render_test.go` asserts each against the rendered PDF.
 | | Major axes every 5 mm, darker or thicker | Implemented |
 | | Minor axes at 1 mm, fainter, thinner or dotted | Implemented |
 | | mm/s and mm/mV statements (*recommended, optional*) | Implemented |
-| | Per-lead gain determinable when leads differ | See below — refused rather than mis-scaled |
+| | Per-lead gain determinable when leads differ | Satisfied — every lead is drawn at one gain (see below) |
 | | Lead labels | Implemented |
 | | Indication denoting each lead-to-lead transition | Implemented |
 | | Statement of frequency content | Implemented, and its absence stated explicitly |
@@ -41,23 +41,42 @@ retrieved. `ecgpdf/render_test.go` asserts each against the rendered PDF.
 | | Vector drawing commands, not a rasterised image | Implemented and tested (no image XObject, no `Do`) |
 | | `Image/svg+xml` (*optional*) | **Not implemented** |
 
-### Per-lead gains
+### Per-lead gains — and a correction
 
 §4.6.4.2.2.4 requires that when leads carry different gains — precordial leads
 at half gain is the case the profile names — the document give enough
 information to determine each lead's gain.
 
-`ecgpdf.Report` holds **one** amplitude scale for the whole recording, so a
-document needing more than one cannot be rendered faithfully. Rather than apply
-the first lead's gain to all twelve, the parsers detect the disagreement and
-refuse (`ErrPerLeadScale` in `fda-to-dicom` and `muse-to-fda`). Both formats
-state the scale per lead, and both parsers previously kept the first and
-discarded the rest, which would have halved or doubled precordial amplitudes on
-a page declaring a single calibration.
+**This requirement is satisfied trivially**, and an earlier version of this file
+said otherwise. The clause is about the *rendered* gain: leads drawn at
+different mm/mV on the page. This renderer draws every lead at the same
+10 mm/mV, stated on the document, so there is never a per-lead gain to declare.
 
-Supporting such documents properly means carrying per-lead scales through to the
-renderer and stating each on the page. Until then, refusing is the honest
-behaviour.
+What was conflated with it is a separate and more serious matter: a **fidelity
+bug**, not a conformance gap. aECG and MUSE state the *digitisation* scale
+(µV/LSB) per lead, and both parsers kept the first lead's value and discarded
+the rest. A recording whose leads were digitised differently therefore had the
+others' amplitudes silently halved or doubled.
+
+The two are easy to confuse and worth separating: applying each lead's own
+µV/LSB is precisely what allows every lead to be drawn at the same mm/mV.
+
+- **aECG read path: fixed.** Per-lead scales are carried from
+  `parseSequenceSet` through `FDAData.LeadSensitivity` and
+  `ecgpdf.Report.ScaleUVByLead` to the renderer, and to the DICOM builder's
+  normalisation. `TestPerLeadScaleRendersTheSameVoltageIdentically` asserts the
+  property that matters — the same voltage expressed at a different
+  digitisation scale renders identically — with a companion test proving that
+  comparison is sensitive to amplitude at all.
+- **MUSE write path: still refused** (`ErrPerLeadScale`). The aECG writer used
+  here takes one scale per series and cannot express more, so the conversion
+  genuinely cannot represent such a recording. Lifting it needs a per-lead
+  scale in `hl7v3-aecg`.
+
+Note what was **not** done: renormalising the samples in the parser onto a
+common scale. It is the obvious parser-local fix and it would modify sample
+values in the decode layer, with rounding, destroying the bit-exactness the
+regulatory position rests on.
 
 ### Anonymous documents
 

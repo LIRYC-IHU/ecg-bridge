@@ -73,6 +73,11 @@ func Render(r *Report, lang string, w io.Writer) error {
 	if r.ScaleUV <= 0 {
 		return fmt.Errorf("%w: amplitude scale (µV per sample unit)", ErrMissingAcquisitionParameter)
 	}
+	for name, s := range r.ScaleUVByLead {
+		if s <= 0 {
+			return fmt.Errorf("%w: amplitude scale for lead %s", ErrMissingAcquisitionParameter, name)
+		}
+	}
 	if r.SampleRate <= 0 {
 		return fmt.Errorf("%w: sampling rate", ErrMissingAcquisitionParameter)
 	}
@@ -381,7 +386,7 @@ func drawSignals(pdf *fpdf.Fpdf, r *Report, sr, scaleUV float64) {
 			name := layout[r0][c]
 			x0 := traceX + float64(c)*colW
 			startSec := float64(c) * secPerCol
-			plotLead(pdf, r.Leads[name], sr, scaleUV, x0, cellTop, colW, rowH, startSec, secPerCol)
+			plotLead(pdf, r.Leads[name], sr, r.scaleFor(name, scaleUV), x0, cellTop, colW, rowH, startSec, secPerCol)
 			leadLabel(pdf, name, x0+1, cellTop+1)
 			// IHE CARD TF-2 §4.6.4.2.2: mark every lead-to-lead transition
 			// within a row, so a reader can see where one lead stops and the
@@ -395,7 +400,7 @@ func drawSignals(pdf *fpdf.Fpdf, r *Report, sr, scaleUV float64) {
 	// Rhythm strip: lead II across the full 10s.
 	rhTop := gridTop + 3*rowH
 	drawCalibrationPulse(pdf, rhTop, rhythmH)
-	plotLead(pdf, r.Leads["II"], sr, scaleUV, traceX, rhTop, traceW, rhythmH, 0, traceW/mmPerSec)
+	plotLead(pdf, r.Leads["II"], sr, r.scaleFor("II", scaleUV), traceX, rhTop, traceW, rhythmH, 0, traceW/mmPerSec)
 	leadLabel(pdf, "II", traceX+1, rhTop+1)
 }
 
@@ -558,6 +563,15 @@ func countStatements(r *Report) int {
 		}
 	}
 	return n
+}
+
+// scaleFor returns the amplitude scale to apply to one lead: its own when the
+// source stated one, otherwise the document's reference scale.
+func (r *Report) scaleFor(lead string, fallback float64) float64 {
+	if s, ok := r.ScaleUVByLead[lead]; ok && s > 0 {
+		return s
+	}
+	return fallback
 }
 
 // hasStatements reports whether the report carries at least one non-empty

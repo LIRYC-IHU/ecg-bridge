@@ -74,9 +74,21 @@ type Report struct {
 	Filter string
 
 	// Signal
-	SampleRate float64            // Hz
-	ScaleUV    float64            // µV per sample unit (digit/LSB)
-	Leads      map[string][]int32 // expects I,II,III,aVR,aVL,aVF,V1..V6
+	SampleRate float64 // Hz
+	// ScaleUV is the amplitude scale in µV per sample unit (digit/LSB) applied
+	// to any lead absent from ScaleUVByLead.
+	ScaleUV float64
+	// ScaleUVByLead is each lead's own amplitude scale, for formats that state
+	// one per lead (aECG does; most vendor formats carry a single value for the
+	// whole recording, and leave this nil).
+	//
+	// Note what this is NOT: it is a digitisation scale, not a display gain.
+	// Every lead is drawn at the same mm/mV — converting each lead's digits
+	// with its own µV/LSB is what makes that true. Using one lead's scale for
+	// all of them silently rescales the others' amplitudes on a page that
+	// declares a single calibration.
+	ScaleUVByLead map[string]float64
+	Leads         map[string][]int32 // expects I,II,III,aVR,aVL,aVF,V1..V6
 
 	// Interpretation. Statements are reproduced verbatim from the source file
 	// and attributed to DeviceModel when rendered.
