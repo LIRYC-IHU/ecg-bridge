@@ -358,3 +358,34 @@ func TestDisclaimerMatchesTheDeclaredIntendedUse(t *testing.T) {
 		t.Error("footer still carries the wording that contradicts the declared intended use")
 	}
 }
+
+// --- identity provenance ---------------------------------------------------
+
+// An identity that reached the document from the acquisition device, and was
+// never confirmed against the HIS, must say so. Both cases render the same
+// patient block otherwise, so without this a reader cannot tell a confirmed
+// identity from an unconfirmed one.
+func TestUnverifiedIdentityIsMarkedOnTheDocument(t *testing.T) {
+	r := sampleReport()
+	r.IdentityUnverified = true
+	text := renderText(t, r, "en")
+
+	if !strings.Contains(text, "IDENTITY NOT CONFIRMED") {
+		t.Errorf("unverified identity carries no notice:\n%s", text)
+	}
+	if !strings.Contains(text, "not verified against the hospital information system") {
+		t.Error("the notice does not say what was not verified")
+	}
+	// The trace must still be produced: withholding it would be worst exactly
+	// when the HIS is unreachable and someone needs to read the ECG.
+	if !strings.Contains(text, "DOE John") {
+		t.Error("the identity itself is no longer rendered")
+	}
+}
+
+func TestConfirmedIdentityCarriesNoNotice(t *testing.T) {
+	text := renderText(t, sampleReport(), "en") // IdentityUnverified defaults to false
+	if strings.Contains(text, "IDENTITY NOT CONFIRMED") {
+		t.Error("a confirmed identity is marked as unconfirmed")
+	}
+}

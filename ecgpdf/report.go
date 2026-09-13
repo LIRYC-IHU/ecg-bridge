@@ -17,6 +17,19 @@ type Statement struct {
 
 // Report is the vendor-neutral input to Render.
 type Report struct {
+	// IdentityUnverified marks the identity below as the one the acquisition
+	// device recorded, not one confirmed against the hospital information
+	// system. The renderer states it on the document.
+	//
+	// This exists because the identity on an ECG can reach the document by two
+	// very different routes. Either the patient identifier travelled with the
+	// trace and was resolved against the HIS, in which case the name printed
+	// here is the establishment's record; or it was typed or scanned at the
+	// cart and never confirmed, in which case it is an unverified claim. A
+	// document that looks identical in both cases invites the reader to trust
+	// the second as much as the first.
+	IdentityUnverified bool
+
 	// Identity
 	PatientID     string
 	Name          string // display name, e.g. "DOE John"

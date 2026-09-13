@@ -9,6 +9,7 @@ type labels struct {
 	ageSuffix, cmSuffix, kgSuffix, bp string
 	meds, symptoms, history           string
 	recordedAt                        string
+	identityUnverified                string
 	hr, prInt, qrsDur                 string
 	qtQtc, axis, amplDiv              string
 	filter, notInSource               string
@@ -29,7 +30,9 @@ var labelsFR = labels{
 	ageSuffix: " ans", cmSuffix: " cm", kgSuffix: " kg", bp: "____ mmHg",
 	meds: "Medicament:", symptoms: "Symptomes:", history: "Historique:",
 	recordedAt: "Enregistré le:",
-	hr:         "Frequence ventriculaire:", prInt: "intervalle PR:", qrsDur: "duree QRS:",
+	identityUnverified: "IDENTITÉ NON CONFIRMÉE — identité enregistrée par l'appareil d'acquisition, " +
+		"non vérifiée auprès du système d'information de l'établissement.",
+	hr: "Frequence ventriculaire:", prInt: "intervalle PR:", qrsDur: "duree QRS:",
 	qtQtc: "int. QT/QTc:", axis: "axe P/QRS/T:",
 	amplDiv: "ampl. RV5/SV1:",
 	filter:  "Filtre:", notInSource: "non renseigné par le fichier source",
@@ -47,7 +50,9 @@ var labelsEN = labels{
 	ageSuffix: " yrs", cmSuffix: " cm", kgSuffix: " kg", bp: "____ mmHg",
 	meds: "Medication:", symptoms: "Symptoms:", history: "History:",
 	recordedAt: "Recorded:",
-	hr:         "Ventricular rate:", prInt: "PR interval:", qrsDur: "QRS duration:",
+	identityUnverified: "IDENTITY NOT CONFIRMED — identity as recorded by the acquisition device, " +
+		"not verified against the hospital information system.",
+	hr: "Ventricular rate:", prInt: "PR interval:", qrsDur: "QRS duration:",
 	qtQtc: "QT/QTc:", axis: "P/QRS/T axis:",
 	amplDiv: "ampl. RV5/SV1:",
 	filter:  "Filter:", notInSource: "not stated in the source file",

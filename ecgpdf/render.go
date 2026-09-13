@@ -94,6 +94,7 @@ func Render(r *Report, lang string, w io.Writer) error {
 	tr := pdf.UnicodeTranslatorFromDescriptor("") // cp1252 for accented French
 
 	drawPatientBlock(pdf, tr, r)
+	drawIdentityNotice(pdf, tr, r)
 	drawStatements(pdf, tr, r)
 	drawMeasurements(pdf, tr, r)
 	drawPhysicianBlock(pdf, tr)
@@ -166,6 +167,40 @@ func drawPatientBlock(pdf *fpdf.Fpdf, tr func(string) string, r *Report) {
 	labelVal(margin, y, lbl.symptoms, r.Symptoms)
 	y += lh
 	labelVal(margin, y, lbl.history, r.History)
+}
+
+// drawIdentityNotice marks an identity the acquisition device recorded and that
+// was never confirmed against the hospital information system.
+//
+// It spans the top margin, above the patient block, for two reasons: it
+// qualifies every identity field below it rather than any single one, and the
+// header area is otherwise full — the patient block already runs to the
+// measurement table with no gap to borrow.
+//
+// Deliberately a notice and not a refusal: an unconfirmed trace is still
+// clinically useful, and the HIS being unreachable is exactly when someone most
+// needs to read the ECG. The document states what it knows rather than
+// withholding itself.
+func drawIdentityNotice(pdf *fpdf.Fpdf, tr func(string) string, r *Report) {
+	if !r.IdentityUnverified {
+		return
+	}
+	const (
+		y = 1.2
+		h = 4.6
+	)
+	w := 297.0 - 2*margin
+
+	pdf.SetFillColor(255, 244, 230)
+	pdf.SetDrawColor(200, 120, 40)
+	pdf.SetLineWidth(0.3)
+	pdf.Rect(margin, y, w, h, "FD")
+
+	pdf.SetFont("Helvetica", "B", 7)
+	pdf.SetTextColor(150, 80, 20)
+	pdf.SetXY(margin, y)
+	pdf.CellFormat(w, h, tr(lbl.identityUnverified), "", 0, "C", false, 0, "")
+	pdf.SetTextColor(0, 0, 0)
 }
 
 // --- header: interpretive statements (top-right) ---
