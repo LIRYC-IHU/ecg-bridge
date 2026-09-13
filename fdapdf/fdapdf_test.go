@@ -2,6 +2,8 @@ package fdapdf
 
 import (
 	"bytes"
+	"compress/zlib"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -74,8 +76,8 @@ func TestFromFDALeavesPerLeadScalesNilWhenAbsent(t *testing.T) {
 // This is the test that fails if any link in the chain drops the per-lead
 // scale, which the unit tests at either end do not catch.
 func TestPerLeadScaleSurvivesTheWholeChain(t *testing.T) {
-	uniform := renderFixture(t, uniformFixture)
-	perLead := renderFixture(t, perLeadFixture)
+	uniform := renderContent(t, uniformFixture)
+	perLead := renderContent(t, perLeadFixture)
 
 	if !bytes.Equal(uniform, perLead) {
 		t.Error("the same recording digitised at different per-lead scales renders differently; " +
@@ -118,7 +120,16 @@ func readFixture(t *testing.T, path string) []byte {
 	return b
 }
 
-func renderFixture(t *testing.T, path string) []byte {
+// renderContent renders a fixture and returns the page's drawing commands.
+//
+// It compares the content stream rather than the PDF bytes, because the file as
+// a whole is NOT reproducible: rendering the same input twice yields two files
+// of identical length and differing bytes, as fpdf writes its font resource
+// dictionary in map order. The first version of this test compared raw bytes
+// and was flaky — it passed locally and failed on CI, which is the worst way to
+// find out. The drawing commands, which are what this test is actually about,
+// are deterministic.
+func renderContent(t *testing.T, path string) []byte {
 	t.Helper()
 	rep, err := ReportFromFile(filepath.Clean(path))
 	if err != nil {
@@ -128,5 +139,40 @@ func renderFixture(t *testing.T, path string) []byte {
 	if err := ecgpdf.Render(rep, "en", &buf); err != nil {
 		t.Fatalf("Render(%s): %v", path, err)
 	}
-	return buf.Bytes()
+
+	// The page content stream is by far the largest deflated stream in the
+	// file; the others are font data.
+	var content []byte
+	rest := buf.Bytes()
+	for {
+		i := bytes.Index(rest, []byte("stream"))
+		if i < 0 {
+			break
+		}
+		body := bytes.TrimLeft(rest[i+len("stream"):], "\r\n")
+		j := bytes.Index(body, []byte("endstream"))
+		if j < 0 {
+			break
+		}
+		if zr, err := zlib.NewReader(bytes.NewReader(body[:j])); err == nil {
+			if dec, err := io.ReadAll(zr); err == nil && len(dec) > len(content) {
+				content = dec
+			}
+			zr.Close()
+		}
+		rest = body[j:]
+	}
+	if len(content) == 0 {
+		t.Fatalf("no content stream could be inflated from the render of %s", path)
+	}
+	return content
+}
+
+// The comparison above is only meaningful if rendering is reproducible at all.
+// Pin that separately, so a future non-determinism in the drawing commands
+// shows up as itself rather than as a confusing per-lead failure.
+func TestRenderingTheSameFixtureTwiceIsReproducible(t *testing.T) {
+	if !bytes.Equal(renderContent(t, uniformFixture), renderContent(t, uniformFixture)) {
+		t.Error("rendering the same document twice produced different drawing commands")
+	}
 }
