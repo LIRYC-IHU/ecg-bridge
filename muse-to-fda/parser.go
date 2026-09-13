@@ -5,10 +5,17 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 )
+
+// ErrPerLeadScale is returned when a MUSE document scales its leads
+// differently. This model holds one amplitude scale for the whole recording,
+// so such a document cannot be represented faithfully and is refused rather
+// than rendered at the first lead's gain.
+var ErrPerLeadScale = errors.New("muse-to-fda: per-lead amplitude scales")
 
 // Lead index in the 12-lead output order: I, II, III, aVR, aVL, aVF, V1..V6.
 const (
@@ -147,10 +154,24 @@ func parseWaveforms(d *MuseData, waveforms []museWaveform) error {
 			}
 		}
 
-		// Sensitivity / baseline from the first available lead.
-		if d.Sensitivity == 0 && len(w.Leads) > 0 {
-			d.Sensitivity = atof(w.Leads[0].AmplitudeUnitsPerBit)
-			d.Baseline = atof(w.Leads[0].FirstSampleBaseline)
+		// MUSE states LeadAmplitudeUnitsPerBit per lead, and this model holds
+		// one amplitude scale. Reading the first lead's value and ignoring the
+		// rest is only safe while they agree; where they do not — precordial
+		// leads at half gain is the documented case — applying lead I's gain
+		// to V1..V6 silently halves or doubles those amplitudes on a document
+		// that declares a single calibration. Refused instead.
+		for _, ld := range w.Leads {
+			sens := atof(ld.AmplitudeUnitsPerBit)
+			if sens == 0 {
+				continue
+			}
+			if d.Sensitivity == 0 {
+				d.Sensitivity = sens
+				d.Baseline = atof(ld.FirstSampleBaseline)
+			} else if sens != d.Sensitivity {
+				return fmt.Errorf("%w: lead %s is scaled at %g µV/LSB where an earlier lead is at %g µV/LSB",
+					ErrPerLeadScale, strings.TrimSpace(ld.ID), sens, d.Sensitivity)
+			}
 		}
 	}
 	return nil

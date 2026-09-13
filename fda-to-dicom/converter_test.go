@@ -704,3 +704,68 @@ func leadSequenceSet(leadCode, scaleValue, scaleUnit, digits string) *types.Sequ
 		}},
 	}
 }
+
+// IHE CARD TF-2 §4.6.4.2.2.4: when leads carry different gains — precordial
+// leads at half gain is the case the profile names — the document must give
+// enough information to determine each lead's gain. This model holds one scale,
+// so a document that needs more than one is refused rather than rendered at the
+// first lead's gain, which would halve or double the precordial amplitudes on a
+// page declaring a single calibration.
+func TestParseSequenceSetRefusesPerLeadScales(t *testing.T) {
+	ss := &types.SequenceSet{Component: []types.SequenceComponent{
+		leadComponent("MDC_ECG_LEAD_I", "5", "uV", "1 2 3"),
+		leadComponent("MDC_ECG_LEAD_V1", "2.5", "uV", "1 2 3"), // half gain
+	}}
+
+	_, _, _, _, err := parseSequenceSet(ss)
+	if !errors.Is(err, ErrPerLeadScale) {
+		t.Fatalf("error = %v, want ErrPerLeadScale", err)
+	}
+}
+
+// Leads that agree must still parse — the check must not reject the ordinary case.
+func TestParseSequenceSetAcceptsUniformScales(t *testing.T) {
+	ss := &types.SequenceSet{Component: []types.SequenceComponent{
+		leadComponent("MDC_ECG_LEAD_I", "5", "uV", "1 2 3"),
+		leadComponent("MDC_ECG_LEAD_V1", "5", "uV", "4 5 6"),
+	}}
+
+	_, sens, _, leads, err := parseSequenceSet(ss)
+	if err != nil {
+		t.Fatalf("parseSequenceSet: %v", err)
+	}
+	if sens != 5 {
+		t.Errorf("sensitivity = %v, want 5", sens)
+	}
+	if len(leads) != 2 {
+		t.Errorf("got %d leads, want 2", len(leads))
+	}
+}
+
+// A scale expressed in a different unit but equal in value must not trip the
+// per-lead check: the comparison happens after conversion to µV.
+func TestParseSequenceSetComparesScalesAfterUnitConversion(t *testing.T) {
+	ss := &types.SequenceSet{Component: []types.SequenceComponent{
+		leadComponent("MDC_ECG_LEAD_I", "5", "uV", "1 2 3"),
+		leadComponent("MDC_ECG_LEAD_V1", "0.005", "mV", "4 5 6"),
+	}}
+
+	if _, _, _, _, err := parseSequenceSet(ss); err != nil {
+		t.Fatalf("equal scales in different units were rejected: %v", err)
+	}
+}
+
+// leadComponent builds one voltage sequence for a lead.
+func leadComponent(leadCode, scaleValue, scaleUnit, digits string) types.SequenceComponent {
+	lead := &types.Code[types.LeadCode, types.CodeSystemOID]{Code: types.LeadCode(leadCode)}
+	return types.SequenceComponent{
+		Sequence: types.Sequence{
+			Code: types.SequenceCode{Lead: lead},
+			Value: &types.SequenceValue{Typed: &types.SLIST_PQ{
+				Origin: pq("0", "uV"),
+				Scale:  pq(scaleValue, scaleUnit),
+				Digits: digits,
+			}},
+		},
+	}
+}

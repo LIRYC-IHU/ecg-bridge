@@ -1,6 +1,7 @@
 package fdatodicom
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -306,16 +307,30 @@ func parseSequenceSet(ss *types.SequenceSet) (samplingRate, sensitivity, baselin
 			if derr != nil {
 				continue
 			}
+			sens, serr := quantityToMicrovolts(v.Scale)
+			if serr != nil {
+				return 0, 0, 0, nil, fmt.Errorf("lead %s scale: %w", leadName, serr)
+			}
+			base, berr := quantityToMicrovolts(v.Origin)
+			if berr != nil {
+				return 0, 0, 0, nil, fmt.Errorf("lead %s origin: %w", leadName, berr)
+			}
+			// aECG carries a scale per lead, and this model holds one. Taking
+			// the first and ignoring the rest is only safe while they agree —
+			// and the case where they do not is the documented one: precordial
+			// leads recorded at half gain. Applying lead I's gain to V1..V6
+			// would halve or double those amplitudes on a document that
+			// declares a single calibration, with nothing to show for it.
+			//
+			// Refused rather than rendered. Supporting per-lead gains properly
+			// means carrying them through to the renderer and stating each on
+			// the document (IHE CARD TF-2 §4.6.4.2.2.4); until then, a file
+			// that needs it must not be silently mis-scaled.
 			if sensitivity == 0 {
-				sens, serr := quantityToMicrovolts(v.Scale)
-				if serr != nil {
-					return 0, 0, 0, nil, fmt.Errorf("lead %s scale: %w", leadName, serr)
-				}
-				base, berr := quantityToMicrovolts(v.Origin)
-				if berr != nil {
-					return 0, 0, 0, nil, fmt.Errorf("lead %s origin: %w", leadName, berr)
-				}
 				sensitivity, baseline = sens, base
+			} else if sens != sensitivity {
+				return 0, 0, 0, nil, fmt.Errorf("%w: lead %s is scaled at %g µV/LSB where an earlier lead is at %g µV/LSB",
+					ErrPerLeadScale, leadName, sens, sensitivity)
 			}
 		case *types.SLIST_INT:
 			var derr error
@@ -627,6 +642,11 @@ func incrementToSeconds(value float64, unit string) (float64, error) {
 		return 0, fmt.Errorf("unsupported time increment unit %q", unit)
 	}
 }
+
+// ErrPerLeadScale is returned when a document scales its leads differently.
+// The model here holds one amplitude scale for the whole recording, so such a
+// document cannot be represented faithfully and is refused.
+var ErrPerLeadScale = errors.New("fda-to-dicom: per-lead amplitude scales")
 
 // quantityToMicrovolts reads a voltage PhysicalQuantity and returns it in µV,
 // which is the unit the rest of this package works in. An absent or unknown

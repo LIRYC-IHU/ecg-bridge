@@ -26,6 +26,14 @@ The Fukuda `.ECG` waveform is decompressed **natively** (Huffman bitstream +
 2nd-order predictor, reverse-engineered from paired sample recordings) — no
 proprietary software or license is required.
 
+### IHE conformance
+
+The document-content requirements of IHE Cardiology transaction **CARD-6** are
+implemented and pinned by tests. The CARD-5 / CARD-6 **transactions** are not,
+and no Information Source actor is claimed. The distinction matters and is
+spelled out in [`docs/ihe-ecg-conformance.md`](docs/ihe-ecg-conformance.md),
+with the parameters a future implementation would have to honour.
+
 ### What the test suite proves
 
 Two different things, and the difference matters:
