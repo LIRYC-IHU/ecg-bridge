@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/LIRYC-IHU/ecg-bridge/fixtures"
 )
 
 const (
@@ -57,10 +59,10 @@ func parseFDADigits(path string) (map[string][]int32, error) {
 
 func TestDecodeLeads_vs_FDAGroundTruth(t *testing.T) {
 	if _, err := os.Stat(testDATFile); os.IsNotExist(err) {
-		t.Skipf("test data not found: %s", testDATFile)
+		fixtures.Require(t, testDATFile, "NK PEC decode against the vendor aECG export")
 	}
 	if _, err := os.Stat(testFDAFile); os.IsNotExist(err) {
-		t.Skipf("test data not found: %s", testFDAFile)
+		fixtures.Require(t, testFDAFile, "NK PEC decode against the vendor aECG export")
 	}
 
 	dat, err := os.ReadFile(testDATFile)
@@ -127,7 +129,7 @@ func TestDecodeLeads_vs_FDAGroundTruth(t *testing.T) {
 
 func TestParseFile_Metadata(t *testing.T) {
 	if _, err := os.Stat(testDATFile); os.IsNotExist(err) {
-		t.Skipf("test data not found: %s", testDATFile)
+		fixtures.Require(t, testDATFile, "NK PEC decode against the vendor aECG export")
 	}
 
 	dat, err := os.ReadFile(testDATFile)
@@ -174,10 +176,10 @@ func TestParseFile_Metadata(t *testing.T) {
 
 func TestDeriveLeads_vs_FDAGroundTruth(t *testing.T) {
 	if _, err := os.Stat(testDATFile); os.IsNotExist(err) {
-		t.Skipf("test data not found: %s", testDATFile)
+		fixtures.Require(t, testDATFile, "NK PEC decode against the vendor aECG export")
 	}
 	if _, err := os.Stat(testFDAFile); os.IsNotExist(err) {
-		t.Skipf("test data not found: %s", testFDAFile)
+		fixtures.Require(t, testFDAFile, "NK PEC decode against the vendor aECG export")
 	}
 
 	dat, err := os.ReadFile(testDATFile)

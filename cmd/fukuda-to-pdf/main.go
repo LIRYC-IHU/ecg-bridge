@@ -37,6 +37,9 @@ func main() {
 	flag.StringVar(&in, "i", "", "input Fukuda .ECG file (required)")
 	flag.StringVar(&out, "o", "", "output PDF path; if omitted, prints the base64-encoded PDF to stdout")
 	flag.StringVar(&lang, "l", "en", "interpretive statement language: en or fr")
+	var identityUnverified bool
+	flag.BoolVar(&identityUnverified, "identity-unverified", false,
+		"mark the document's identity as recorded by the acquisition device and not confirmed against the hospital information system")
 	var showVersion bool
 	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.Parse()
@@ -61,6 +64,8 @@ func main() {
 	}
 
 	rep := buildReport(fd, lang)
+
+	rep.IdentityUnverified = identityUnverified
 
 	var buf bytes.Buffer
 	if err := ecgpdf.Render(rep, lang, &buf); err != nil {
@@ -104,12 +109,12 @@ func buildReport(fd *fukudatofda.FukudaData, lang string) *ecgpdf.Report {
 		DeviceModel: p.DeviceModel,
 		Location:    p.Location,
 		RecordingAt: p.RecordingAt,
-		HeartRate:   m.HeartRate,
-		PRInterval:  m.PRInterval,
-		QRSDuration: m.QRSDuration,
-		QTInterval:  m.QTInterval,
-		QTcInterval: m.QTcInterval,
-		QRSAxis:     m.QRSAxis,
+		HeartRate:   ecgpdf.MeasuredNonZero(m.HeartRate),
+		PRInterval:  ecgpdf.MeasuredNonZero(m.PRInterval),
+		QRSDuration: ecgpdf.MeasuredNonZero(m.QRSDuration),
+		QTInterval:  ecgpdf.MeasuredNonZero(m.QTInterval),
+		QTcInterval: ecgpdf.MeasuredNonZero(m.QTcInterval),
+		QRSAxis:     ecgpdf.MeasuredNonZero(m.QRSAxis),
 		SampleRate:  float64(fd.Record.SampleRate),
 		ScaleUV:     fd.Record.Scale,
 		Leads:       leadMap,

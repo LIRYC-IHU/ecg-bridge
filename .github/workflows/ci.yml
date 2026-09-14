@@ -24,7 +24,37 @@ jobs:
           cache: true
 
       - name: go test
-        run: go test -v -race -coverprofile=coverage.out ./...
+        # pipefail is required: without it the pipe into tee would report tee's
+        # exit status and a failing test suite would pass the job.
+        shell: bash
+        run: |
+          set -o pipefail
+          go test -v -race -coverprofile=coverage.out ./... 2>&1 | tee test.log
+
+      # Decode-fidelity tests compare against real recordings, which are patient
+      # data and are not in this repository. On this runner they skip, so a
+      # green run does NOT mean sample fidelity was verified. List them by name
+      # in the job summary rather than letting the check mark imply otherwise.
+      - name: Report unverified checks
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Checks that did not run on this runner"
+            echo
+            if grep -q -- "--- SKIP" test.log; then
+              echo "These need reference recordings (patient data, not shipped)."
+              echo "Run with \`ECGBRIDGE_REQUIRE_FIXTURES=1\` on a machine that has them."
+              echo
+              echo '```'
+              # go test -v prints the skip reason immediately BEFORE the
+              # "--- SKIP" line, so pair each SKIP with the line above it.
+              grep -B1 -- "--- SKIP" test.log | grep -v '^--$' | sed 's/^[[:space:]]*//'
+              echo '```'
+            else
+              echo "None — every test in the suite ran."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage
         if: matrix.os == 'ubuntu-latest'

@@ -18,7 +18,7 @@ var extraBitsCount = [33]int{
 
 // huffSym holds a Huffman code table entry.
 type huffSym struct {
-	bitLen  int
+	bitLen   int
 	codeword uint32 // MSB-aligned on 32 bits
 }
 

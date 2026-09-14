@@ -2,11 +2,15 @@ package fdatodicom
 
 import (
 	"encoding/binary"
+	"errors"
 	"math"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/LIRYC-IHU/ecg-bridge/fixtures"
+
+	"github.com/LIRYC-IHU/hl7v3-aecg/hl7aecg/types"
 	"github.com/suyashkumar/dicom"
 	"github.com/suyashkumar/dicom/pkg/tag"
 )
@@ -28,7 +32,7 @@ var testPatients = []string{
 func requireFDADir(t *testing.T) {
 	t.Helper()
 	if _, err := os.Stat(testFDADir); os.IsNotExist(err) {
-		t.Skip("FDA test data not available (data_test/fda not present)")
+		fixtures.Require(t, "data_test/fda", "aECG parsing against real documents")
 	}
 }
 
@@ -69,7 +73,7 @@ func TestParseMetadata(t *testing.T) {
 // TestParseInstitutionAndSerial checks InstitutionName and SerialNumber from a Mindray FDA XML.
 func TestParseInstitutionAndSerial(t *testing.T) {
 	if _, err := os.Stat(testMindrayXML); os.IsNotExist(err) {
-		t.Skip("Mindray test file not found")
+		fixtures.Require(t, "the Mindray aECG sample", "institution/serial extraction and DICOM device fields")
 	}
 	d, err := ParseFDA(testMindrayXML)
 	if err != nil {
@@ -190,7 +194,7 @@ func TestParseRepBeats(t *testing.T) {
 // TestDICOMDeviceSerial checks that (0018,1000) DeviceSerialNumber is written.
 func TestDICOMDeviceSerial(t *testing.T) {
 	if _, err := os.Stat(testMindrayXML); os.IsNotExist(err) {
-		t.Skip("Mindray test file not found")
+		fixtures.Require(t, "the Mindray aECG sample", "institution/serial extraction and DICOM device fields")
 	}
 	output := filepath.Join(t.TempDir(), "mindray.dcm")
 	if err := Convert(testMindrayXML, output, false, nil); err != nil {
@@ -324,7 +328,7 @@ func TestConvertAll(t *testing.T) {
 func TestWaveformCorrelation(t *testing.T) {
 	requireFDADir(t)
 	if _, err := os.Stat(refDICOMBase); os.IsNotExist(err) {
-		t.Skip("reference DICOM volume not mounted")
+		fixtures.Require(t, "the reference DICOM volume", "waveform correlation against the vendor DICOM export")
 	}
 
 	for _, patient := range testPatients {
@@ -537,4 +541,242 @@ func pearsonCorrelation(a, b []float64) float64 {
 		return 0
 	}
 	return cov / denom
+}
+
+// --- units and sample width ------------------------------------------------
+
+func pq(value, unit string) types.PhysicalQuantity {
+	return types.PhysicalQuantity{Value: value, Unit: unit}
+}
+
+// aECG states the unit of the amplitude scale. Reading the number and ignoring
+// the unit makes a document written in mV render 1000x too small, with nothing
+// to show for it.
+func TestQuantityToMicrovolts(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   types.PhysicalQuantity
+		want float64
+	}{
+		{"microvolts", pq("5", "uV"), 5},
+		{"micro sign", pq("2.5", "µV"), 2.5},
+		{"millivolts", pq("0.005", "mV"), 5},
+		{"volts", pq("0.000005", "V"), 5},
+		{"zero needs no unit", pq("0", ""), 0},
+		{"empty value", pq("", ""), 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := quantityToMicrovolts(tc.in)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if math.Abs(got-tc.want) > 1e-9 {
+				t.Errorf("got %v µV, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestQuantityToMicrovoltsRefusesUnknownUnit(t *testing.T) {
+	for _, in := range []types.PhysicalQuantity{
+		pq("5", ""),   // no unit at all — the old silent "assume uV"
+		pq("5", "mm"), // not a voltage
+		pq("5", "counts"),
+	} {
+		if _, err := quantityToMicrovolts(in); err == nil {
+			t.Errorf("quantityToMicrovolts(%+v) accepted an unusable unit", in)
+		}
+	}
+}
+
+func TestIncrementToSeconds(t *testing.T) {
+	for _, tc := range []struct {
+		value float64
+		unit  string
+		want  float64
+	}{
+		{0.002, "s", 0.002},
+		{2, "ms", 0.002},
+		{2000, "us", 0.002},
+	} {
+		got, err := incrementToSeconds(tc.value, tc.unit)
+		if err != nil {
+			t.Fatalf("incrementToSeconds(%v, %q): %v", tc.value, tc.unit, err)
+		}
+		if math.Abs(got-tc.want) > 1e-12 {
+			t.Errorf("incrementToSeconds(%v, %q) = %v, want %v", tc.value, tc.unit, got, tc.want)
+		}
+	}
+	if _, err := incrementToSeconds(0.002, ""); err == nil {
+		t.Error("an unmarked time increment must be refused, not assumed to be seconds")
+	}
+}
+
+// DICOM waveform samples here are 16-bit. A sample that does not fit is a real
+// limit of the output format; wrapping it turns a tall QRS into an inverted
+// spike that looks like signal.
+func TestBuildRefusesSampleOutOfInt16Range(t *testing.T) {
+	d := &FDAData{
+		SamplingRate: 500,
+		Sensitivity:  5, // µV/LSB
+		Leads:        map[string][]int32{"I": {0, 100, 40000}},
+	}
+	_, err := buildWaveformItem(d, "ORIGINAL", "RHYTHM", d.Leads)
+	if !errors.Is(err, ErrSampleOutOfRange) {
+		t.Fatalf("error = %v, want ErrSampleOutOfRange", err)
+	}
+}
+
+func TestBuildRefusesMissingSensitivity(t *testing.T) {
+	d := &FDAData{
+		SamplingRate: 500,
+		Leads:        map[string][]int32{"I": {0, 1, 2}},
+	}
+	_, err := buildWaveformItem(d, "ORIGINAL", "RHYTHM", d.Leads)
+	if !errors.Is(err, ErrMissingAcquisitionParameter) {
+		t.Fatalf("error = %v, want ErrMissingAcquisitionParameter", err)
+	}
+}
+
+// Samples wider than int16 must survive parsing intact. Narrowing them here
+// used to wrap a tall QRS into an inverted spike that reads as signal.
+func TestParseSequenceSetKeepsSamplesWiderThanInt16(t *testing.T) {
+	ss := leadSequenceSet("MDC_ECG_LEAD_I", "5", "uV", "0 40000 -40000 100")
+
+	seq, err := parseSequenceSet(ss)
+	if err != nil {
+		t.Fatalf("parseSequenceSet: %v", err)
+	}
+	if seq.sensitivity != 5 {
+		t.Errorf("sensitivity = %v µV/LSB, want 5", seq.sensitivity)
+	}
+	want := []int32{0, 40000, -40000, 100}
+	got := seq.leads["I"]
+	if len(got) != len(want) {
+		t.Fatalf("lead I has %d samples, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("sample %d = %d, want %d", i, got[i], want[i])
+		}
+	}
+}
+
+// The scale unit is read, not assumed: the same digits declared in mV must come
+// back scaled a thousandfold, not identically.
+func TestParseSequenceSetHonoursScaleUnit(t *testing.T) {
+	inUV := leadSequenceSet("MDC_ECG_LEAD_I", "5", "uV", "1 2 3")
+	inMV := leadSequenceSet("MDC_ECG_LEAD_I", "0.005", "mV", "1 2 3")
+
+	uv, err := parseSequenceSet(inUV)
+	if err != nil {
+		t.Fatalf("uV: %v", err)
+	}
+	mv, err := parseSequenceSet(inMV)
+	if err != nil {
+		t.Fatalf("mV: %v", err)
+	}
+	if math.Abs(uv.sensitivity-mv.sensitivity) > 1e-9 {
+		t.Errorf("same scale expressed in uV (%v) and mV (%v) disagree", uv.sensitivity, mv.sensitivity)
+	}
+}
+
+func TestParseSequenceSetRefusesUnmarkedScale(t *testing.T) {
+	ss := leadSequenceSet("MDC_ECG_LEAD_I", "5", "", "1 2 3")
+	if _, err := parseSequenceSet(ss); err == nil {
+		t.Error("a scale with no unit was accepted; it used to be assumed to be uV")
+	}
+}
+
+// leadSequenceSet builds a minimal aECG voltage sequence for one lead.
+func leadSequenceSet(leadCode, scaleValue, scaleUnit, digits string) *types.SequenceSet {
+	lead := &types.Code[types.LeadCode, types.CodeSystemOID]{Code: types.LeadCode(leadCode)}
+	return &types.SequenceSet{
+		Component: []types.SequenceComponent{{
+			Sequence: types.Sequence{
+				Code: types.SequenceCode{Lead: lead},
+				Value: &types.SequenceValue{Typed: &types.SLIST_PQ{
+					Origin: pq("0", "uV"),
+					Scale:  pq(scaleValue, scaleUnit),
+					Digits: digits,
+				}},
+			},
+		}},
+	}
+}
+
+// aECG states the amplitude scale per lead and does not require the leads to
+// agree — precordial leads recorded at half gain is the case that occurs. Each
+// lead's own scale must survive parsing: collapsing them onto the first lead's
+// value silently halves or doubles the others' amplitudes.
+//
+// Note this is a digitisation scale, not a display gain. Applying each lead's
+// own µV/LSB is precisely what lets the renderer draw every lead at the same
+// mm/mV.
+func TestParseSequenceSetKeepsPerLeadScales(t *testing.T) {
+	ss := &types.SequenceSet{Component: []types.SequenceComponent{
+		leadComponent("MDC_ECG_LEAD_I", "5", "uV", "1 2 3"),
+		leadComponent("MDC_ECG_LEAD_V1", "2.5", "uV", "1 2 3"), // half gain
+	}}
+
+	seq, err := parseSequenceSet(ss)
+	if err != nil {
+		t.Fatalf("parseSequenceSet: %v", err)
+	}
+	if got := seq.leadScale["I"]; got != 5 {
+		t.Errorf("lead I scale = %v, want 5", got)
+	}
+	if got := seq.leadScale["V1"]; got != 2.5 {
+		t.Errorf("lead V1 scale = %v, want 2.5 — the second lead's scale was discarded", got)
+	}
+	if seq.sensitivity != 5 {
+		t.Errorf("reference scale = %v, want the first lead's 5", seq.sensitivity)
+	}
+}
+
+// Leads that agree must still parse — the check must not reject the ordinary case.
+func TestParseSequenceSetAcceptsUniformScales(t *testing.T) {
+	ss := &types.SequenceSet{Component: []types.SequenceComponent{
+		leadComponent("MDC_ECG_LEAD_I", "5", "uV", "1 2 3"),
+		leadComponent("MDC_ECG_LEAD_V1", "5", "uV", "4 5 6"),
+	}}
+
+	seq, err := parseSequenceSet(ss)
+	if err != nil {
+		t.Fatalf("parseSequenceSet: %v", err)
+	}
+	if seq.sensitivity != 5 {
+		t.Errorf("sensitivity = %v, want 5", seq.sensitivity)
+	}
+	if len(seq.leads) != 2 {
+		t.Errorf("got %d leads, want 2", len(seq.leads))
+	}
+}
+
+// A scale expressed in a different unit but equal in value must not trip the
+// per-lead check: the comparison happens after conversion to µV.
+func TestParseSequenceSetComparesScalesAfterUnitConversion(t *testing.T) {
+	ss := &types.SequenceSet{Component: []types.SequenceComponent{
+		leadComponent("MDC_ECG_LEAD_I", "5", "uV", "1 2 3"),
+		leadComponent("MDC_ECG_LEAD_V1", "0.005", "mV", "4 5 6"),
+	}}
+
+	if _, err := parseSequenceSet(ss); err != nil {
+		t.Fatalf("equal scales in different units were rejected: %v", err)
+	}
+}
+
+// leadComponent builds one voltage sequence for a lead.
+func leadComponent(leadCode, scaleValue, scaleUnit, digits string) types.SequenceComponent {
+	lead := &types.Code[types.LeadCode, types.CodeSystemOID]{Code: types.LeadCode(leadCode)}
+	return types.SequenceComponent{
+		Sequence: types.Sequence{
+			Code: types.SequenceCode{Lead: lead},
+			Value: &types.SequenceValue{Typed: &types.SLIST_PQ{
+				Origin: pq("0", "uV"),
+				Scale:  pq(scaleValue, scaleUnit),
+				Digits: digits,
+			}},
+		},
+	}
 }

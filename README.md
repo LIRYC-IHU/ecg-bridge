@@ -24,8 +24,37 @@ Each converter lives in its own directory and can be used independently.
 
 The Fukuda `.ECG` waveform is decompressed **natively** (Huffman bitstream +
 2nd-order predictor, reverse-engineered from paired sample recordings) — no
-proprietary software or license is required. Decoding is validated byte-exact
-against the paired reference (MFER) exports.
+proprietary software or license is required.
+
+### IHE conformance
+
+The document-content requirements of IHE Cardiology transaction **CARD-6** are
+implemented and pinned by tests. The CARD-5 / CARD-6 **transactions** are not,
+and no Information Source actor is claimed. The distinction matters and is
+spelled out in [`docs/ihe-ecg-conformance.md`](docs/ihe-ecg-conformance.md),
+with the parameters a future implementation would have to honour.
+
+### What the test suite proves
+
+Two different things, and the difference matters:
+
+- **Runs everywhere, including CI.** Round-trip tests encode known samples with
+  the format's own Huffman tree and predictor, decode them back and require
+  bit-exact equality (`fukuda-to-fda/roundtrip_test.go`,
+  `nk-to-fda/roundtrip_test.go`), plus the CARD-6 acceptance tests on the
+  rendered PDF (`ecgpdf/render_test.go`).
+- **Needs reference recordings, which are patient data and are not shipped.**
+  Decoding was validated byte-exact against paired vendor exports (Fukuda: MFER;
+  NK: the device's own aECG export), but those comparisons cannot run here. They
+  skip, and CI lists every one of them by name in the job summary so a green run
+  is not mistaken for verified fidelity. On a machine that holds the recordings,
+  run `ECGBRIDGE_REQUIRE_FIXTURES=1 go test ./...` — a missing fixture is then a
+  failure rather than a skip.
+
+Note that decoding NK is not purely lossless decompression: segments stored at
+half rate are reconstructed by linear interpolation
+(`TestMode1UpsampleSynthesisesMidpoints` pins this), and the four augmented
+leads are computed from I and II rather than read from the file.
 
 ## PDF Reports
 
@@ -49,14 +78,21 @@ amplitudes, medications, clinical history, …).
 
 ### Features
 
-- **Vector traces** — polylines on a calibrated grid (28 mm/s · 12 mm/mV); zoom
-  without pixelation. Each major grid square stays 0.2 s / 0.5 mV.
+- **Vector traces** — polylines on a calibrated grid at the clinical standard
+  scale (25 mm/s · 10 mm/mV); zoom without pixelation. A minor grid square is
+  1 mm — 0.04 s by 0.1 mV — and a major square 5 mm, so the ruling a clinician
+  measures against is square and true to scale. The scale is not a layout
+  parameter: see `ecgpdf/render_test.go`, which pins it.
+- **Calibration pulse** — a 1 mV × 200 ms reference step opens every row, so the
+  gain announced on the page can be checked against the gain actually drawn.
+- **Missing parameters are stated** — when the source file carries no
+  acquisition bandwidth, no recording time or no interpretation status, the
+  document says so rather than leaving the field blank.
+- **No derived measurement** — device-reported values are reproduced verbatim
+  and nothing is computed from them.
 - **Selectable text** — all metadata is real text, not a rasterized image.
-- **Fillable forms** — patient and measurement values are pre-filled AcroForm
-  fields (blank when unknown); a clinician can complete/correct and sign in any
-  PDF viewer. Disable with `-forms=false`.
-- **Physician-diagnosis block** — editable free-text area + Physician/Date line,
-  below the interpretation.
+- **Physician-diagnosis block** — a bordered free-text area and a Physician/Date
+  line, below the interpretation, to be completed by hand on a printout.
 - **Bilingual** — `-l en` (default) or `-l fr`.
 
 ### Usage
@@ -191,7 +227,6 @@ go install github.com/LIRYC-IHU/ecg-bridge/cmd/philips-to-pdf@latest
 
 - **[hl7v3-aecg](https://github.com/LIRYC-IHU/hl7v3-aecg)** — Go library for generating/parsing FDA-compliant HL7 v3 aECG XML files (12-lead ECG, annotations, clinical trial metadata)
 - **[go-pdf/fpdf](https://github.com/go-pdf/fpdf)** — pure-Go PDF generation (vector traces + selectable text) for the PDF reports
-- **[pdfcpu](https://github.com/pdfcpu/pdfcpu)** — overlays the fillable AcroForm fields onto the rendered PDF
 
 ```bash
 go get github.com/LIRYC-IHU/hl7v3-aecg

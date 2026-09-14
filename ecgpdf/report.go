@@ -17,6 +17,19 @@ type Statement struct {
 
 // Report is the vendor-neutral input to Render.
 type Report struct {
+	// IdentityUnverified marks the identity below as the one the acquisition
+	// device recorded, not one confirmed against the hospital information
+	// system. The renderer states it on the document.
+	//
+	// This exists because the identity on an ECG can reach the document by two
+	// very different routes. Either the patient identifier travelled with the
+	// trace and was resolved against the HIS, in which case the name printed
+	// here is the establishment's record; or it was typed or scanned at the
+	// cart and never confirmed, in which case it is an unverified claim. A
+	// document that looks identical in both cases invites the reader to trust
+	// the second as much as the first.
+	IdentityUnverified bool
+
 	// Identity
 	PatientID     string
 	Name          string // display name, e.g. "DOE John"
@@ -39,23 +52,71 @@ type Report struct {
 	Location    string
 	RecordingAt time.Time
 
-	// Measurements (0 = not set, rendered as 0)
-	HeartRate, PRInterval, QRSDuration, QTInterval, QTcInterval int
-	PAxis, QRSAxis, TAxis                                       int
+	// Measurements produced by the acquiring device, in bpm / ms / degrees.
+	//
+	// These are pointers so that "absent" is representable. A plain int cannot
+	// distinguish a QRS axis the device measured at 0° from one it never
+	// reported, and the renderer would print both as "0" — asserting a
+	// measurement the source file never made. nil renders as an em dash.
+	HeartRate, PRInterval, QRSDuration, QTInterval, QTcInterval *int
+	PAxis, QRSAxis, TAxis                                       *int
 
-	// Vendor-specific amplitudes (NK RV5/SV1); rendered only when true.
+	// Vendor-specific amplitudes (NK RV5/SV1), read from the source file and
+	// reproduced as-is; rendered only when true. No value is ever derived from
+	// them — in particular their sum (a voltage criterion) is not computed here.
 	ShowAmplitudes             bool
 	V5RAmplitude, V1SAmplitude float64
 
 	// Filter spec value, e.g. "H50–150 Hz". The localized "Filter:" word is
-	// added by the renderer; an empty value hides the filter part entirely.
+	// added by the renderer. An empty value is NOT hidden: the renderer states
+	// that the source file does not carry the acquisition bandwidth, so the
+	// document never stays silent about a parameter it could not read.
 	Filter string
 
 	// Signal
-	SampleRate float64            // Hz
-	ScaleUV    float64            // µV per sample unit (digit/LSB)
-	Leads      map[string][]int32 // expects I,II,III,aVR,aVL,aVF,V1..V6
+	SampleRate float64 // Hz
+	// ScaleUV is the amplitude scale in µV per sample unit (digit/LSB) applied
+	// to any lead absent from ScaleUVByLead.
+	ScaleUV float64
+	// ScaleUVByLead is each lead's own amplitude scale, for formats that state
+	// one per lead (aECG does; most vendor formats carry a single value for the
+	// whole recording, and leave this nil).
+	//
+	// Note what this is NOT: it is a digitisation scale, not a display gain.
+	// Every lead is drawn at the same mm/mV — converting each lead's digits
+	// with its own µV/LSB is what makes that true. Using one lead's scale for
+	// all of them silently rescales the others' amplitudes on a page that
+	// declares a single calibration.
+	ScaleUVByLead map[string]float64
+	Leads         map[string][]int32 // expects I,II,III,aVR,aVL,aVF,V1..V6
 
-	// Interpretation
-	Statements []Statement
+	// Interpretation. Statements are reproduced verbatim from the source file
+	// and attributed to DeviceModel when rendered.
+	//
+	// InterpretationStatus is the confirmation status the source file carries
+	// for those statements ("Confirmed" / "Unconfirmed Report", IHE CARD TF-2
+	// §4.6.4.2.2). It is never inferred: when the source does not state it, the
+	// renderer says so explicitly rather than picking a default.
+	Statements           []Statement
+	InterpretationStatus string
+}
+
+// Measured wraps a measurement the source file carried, for the optional
+// fields of Report.
+func Measured(v int) *int { return &v }
+
+// MeasuredNonZero wraps v unless it is zero.
+//
+// Every vendor model in this repository stores measurements as plain integers
+// with zero meaning "the device did not report this", so that is the rule the
+// front-ends apply. It is lossy in one direction: a frontal axis the device
+// genuinely measured at 0° is reported as absent. That is the safe direction —
+// an axis is readable from the trace, whereas a fabricated "0" in the
+// measurement table is indistinguishable from a finding. A front-end whose
+// format can tell the two apart should call Measured directly.
+func MeasuredNonZero(v int) *int {
+	if v == 0 {
+		return nil
+	}
+	return &v
 }

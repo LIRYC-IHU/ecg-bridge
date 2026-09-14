@@ -11,21 +11,21 @@ const pecHeaderSize = 14 // 10B preamble + 2B SIZE + 2B TYPE
 
 // pec section type IDs
 const (
-	secPointer        = 0x0000
-	secSystem         = 0x0001
-	secPatient        = 0x0002
-	secCriteria       = 0x0006
-	secMeasurement    = 0x0007
-	secRecord         = 0x0008
-	sec12Lead         = 0x0100
-	secSJISPatient    = 0x0103
-	secAnaCondition   = 0x0104
-	secRecExtend      = 0x0108
-	secAnalysis       = 0x0110
-	secPatient2       = 0x0113
-	secRecExtendAdd   = 0x0115
-	secExerciseLoad   = 0x0200
-	secNehbRecord     = 0x0120
+	secPointer      = 0x0000
+	secSystem       = 0x0001
+	secPatient      = 0x0002
+	secCriteria     = 0x0006
+	secMeasurement  = 0x0007
+	secRecord       = 0x0008
+	sec12Lead       = 0x0100
+	secSJISPatient  = 0x0103
+	secAnaCondition = 0x0104
+	secRecExtend    = 0x0108
+	secAnalysis     = 0x0110
+	secPatient2     = 0x0113
+	secRecExtendAdd = 0x0115
+	secExerciseLoad = 0x0200
+	secNehbRecord   = 0x0120
 )
 
 // section holds the offset and data of a PEC section.

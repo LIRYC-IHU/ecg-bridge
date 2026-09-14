@@ -2,8 +2,10 @@ package philipstodicom
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -104,6 +106,10 @@ func (d *PhilipsData) ApplyMetadata(ov *metaject.Override) {
 const philipsNamespace = "http://www3.medical.philips.com"
 
 // validatePhilipsXML vérifie que le contenu XML est bien un fichier Philips SierraECG.
+// ErrMissingAcquisitionParameter is returned when the SierraECG file does not
+// carry a parameter the conversion cannot substitute for.
+var ErrMissingAcquisitionParameter = errors.New("philips-to-dicom: missing acquisition parameter")
+
 func validatePhilipsXML(raw []byte) error {
 	// Scan rapide des 4 Ko pour éviter de tout parser
 	head := raw
@@ -166,9 +172,12 @@ func ParsePhilips(path string) (*PhilipsData, error) {
 	d.SamplingRate = parseFloat(px.DataAcq.Signal.SamplingRate)
 	d.BitsPerSample = parseInt(px.DataAcq.Signal.BitsPerSample)
 	d.NumChannels = parseInt(px.DataAcq.Signal.Channels)
+	// No fallback resolution. 5 µV/LSB is the common Philips value, but
+	// assuming it for a file that does not state it makes every amplitude on
+	// the resulting trace a guess presented as a measurement.
 	d.Sensitivity = parseFloat(px.DataAcq.Signal.Resolution)
-	if d.Sensitivity == 0 {
-		d.Sensitivity = 5.0
+	if d.Sensitivity <= 0 {
+		return nil, fmt.Errorf("%w: <signalresolution> absent or unusable in %s", ErrMissingAcquisitionParameter, filepath.Base(path))
 	}
 	d.Baseline = parseFloat(px.DataAcq.Signal.SignalOffset)
 

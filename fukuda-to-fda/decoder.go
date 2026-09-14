@@ -1,5 +1,14 @@
 package fukudatofda
 
+import (
+	"errors"
+	"fmt"
+)
+
+// ErrTruncatedStream is returned when the waveform bitstream does not carry all
+// the samples the file header announces.
+var ErrTruncatedStream = errors.New("fukuda: truncated waveform bitstream")
+
 // Waveform decompression for Fukuda .ECG files.
 //
 // Reverse-engineered from paired sample recordings (raw .ECG alongside their
@@ -54,7 +63,12 @@ func (b *bitReader) bits(n int) int {
 // DecodeAll decodes nLeads*nSamples samples from the bitstream starting at
 // startBit and splits them into per-lead slices. Leads are stored sequentially
 // (I, II, V1..V6) with predictor state carried across the whole stream.
-func DecodeAll(data []byte, startBit, nLeads, nSamples int) [][]int32 {
+//
+// A stream that ends before nLeads*nSamples samples have been produced is an
+// error. It used to be padded with zeros, which silently turned a truncated
+// file into a flat isoelectric segment — indistinguishable, on the trace, from
+// a recorded asystole.
+func DecodeAll(data []byte, startBit, nLeads, nSamples int) ([][]int32, error) {
 	br := &bitReader{data: data, pos: startBit}
 	total := nLeads * nSamples
 	flat := make([]int32, 0, total)
@@ -80,13 +94,12 @@ func DecodeAll(data []byte, startBit, nLeads, nSamples int) [][]int32 {
 		prev2, prev1 = prev1, x
 		flat = append(flat, x)
 	}
-	// pad in case the stream ended early, so slicing never panics
-	for len(flat) < total {
-		flat = append(flat, 0)
+	if len(flat) < total {
+		return nil, fmt.Errorf("%w: bitstream ended after %d of %d samples", ErrTruncatedStream, len(flat), total)
 	}
 	leads := make([][]int32, nLeads)
 	for i := 0; i < nLeads; i++ {
 		leads[i] = flat[i*nSamples : (i+1)*nSamples]
 	}
-	return leads
+	return leads, nil
 }

@@ -2,12 +2,27 @@ package fdatodicom
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"math"
 
 	dicomconf "github.com/LIRYC-IHU/ecg-bridge/dicomconf"
 
 	"github.com/suyashkumar/dicom"
 	"github.com/suyashkumar/dicom/pkg/tag"
+)
+
+// Errors surfaced when the source file does not support a faithful conversion.
+// Both are refusals by design: a converter that guesses an acquisition
+// parameter, or that wraps a sample it cannot represent, produces a file that
+// looks valid and is wrong.
+var (
+	// ErrMissingAcquisitionParameter is returned when the source file carries
+	// no value for a parameter the output must state.
+	ErrMissingAcquisitionParameter = errors.New("fda-to-dicom: missing acquisition parameter")
+	// ErrSampleOutOfRange is returned when a sample cannot be represented in
+	// the output format's sample width.
+	ErrSampleOutOfRange = errors.New("fda-to-dicom: sample out of range")
 )
 
 // leadOrder is the canonical DICOM 12-lead order.
@@ -93,9 +108,9 @@ func BuildDICOM(d *FDAData) (dicom.Dataset, error) {
 }
 
 // buildWaveformItem creates one WaveformSequence item from a map of lead data.
-func buildWaveformItem(d *FDAData, originality, label string, leads map[string][]int16) ([]*dicom.Element, error) {
+func buildWaveformItem(d *FDAData, originality, label string, leads map[string][]int32) ([]*dicom.Element, error) {
 	// Collect leads in canonical order, find max length
-	orderedLeads := make([][]int16, 0, len(leadOrder))
+	orderedLeads := make([][]int32, 0, len(leadOrder))
 	numSamples := 0
 	for _, name := range leadOrder {
 		samples := leads[name]
@@ -125,15 +140,33 @@ func buildWaveformItem(d *FDAData, originality, label string, leads map[string][
 	// Normalize to 1 µV/LSB: multiply raw digits by sensitivity (+ baseline).
 	// This ensures DICOM raw int16 values directly represent µV regardless of
 	// the source file's original scale factor.
-	sensitivity := d.Sensitivity
-	if sensitivity == 0 {
-		sensitivity = 1
+	//
+	// A missing sensitivity is refused rather than defaulted to 1: writing the
+	// digits out unscaled while declaring ChannelSensitivity "1" would assert
+	// that they are microvolts, which is exactly the claim we cannot make.
+	if d.Sensitivity == 0 {
+		return nil, fmt.Errorf("%w: amplitude scale absent from the source file", ErrMissingAcquisitionParameter)
 	}
 	scaledLeads := make([][]int16, len(orderedLeads))
 	for i, lead := range orderedLeads {
+		// Each lead is normalised with its OWN scale. aECG states the scale per
+		// lead, and using the document's reference scale for all of them would
+		// rescale any lead recorded at a different gain — half-gain precordials
+		// being the case that occurs in practice.
+		sensitivity := d.Sensitivity
+		if s, ok := d.LeadSensitivity[leadOrder[i]]; ok && s > 0 {
+			sensitivity = s
+		}
 		scaledLeads[i] = make([]int16, len(lead))
 		for j, v := range lead {
-			scaledLeads[i][j] = int16(float64(v)*sensitivity + d.Baseline)
+			// DICOM WaveformBitsAllocated is 16 below, so a sample that does
+			// not fit is a real limit of this output format, not something to
+			// wrap silently into an inverted spike.
+			uv := float64(v)*sensitivity + d.Baseline
+			if uv > math.MaxInt16 || uv < math.MinInt16 {
+				return nil, fmt.Errorf("%w: sample %.0f µV exceeds the 16-bit DICOM waveform range", ErrSampleOutOfRange, uv)
+			}
+			scaledLeads[i][j] = int16(math.Round(uv))
 		}
 	}
 

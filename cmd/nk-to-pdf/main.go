@@ -36,6 +36,9 @@ func main() {
 	flag.StringVar(&in, "i", "", "input NK .DAT file (required)")
 	flag.StringVar(&out, "o", "", "output PDF path; if omitted, prints the base64-encoded PDF to stdout")
 	flag.StringVar(&lang, "l", "en", "interpretive statement language: en or fr")
+	var identityUnverified bool
+	flag.BoolVar(&identityUnverified, "identity-unverified", false,
+		"mark the document's identity as recorded by the acquisition device and not confirmed against the hospital information system")
 	var showVersion bool
 	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.Parse()
@@ -65,6 +68,8 @@ func main() {
 	nd.Leads = leads
 
 	rep := buildReport(nd, lang)
+
+	rep.IdentityUnverified = identityUnverified
 
 	var buf bytes.Buffer
 	if err := ecgpdf.Render(rep, lang, &buf); err != nil {
@@ -117,22 +122,24 @@ func buildReport(nd *nktofda.NKData, lang string) *ecgpdf.Report {
 		Operator:       p.Operator,
 		Location:       p.Location,
 		RecordingAt:    p.RecordingAt,
-		HeartRate:      m.HeartRate,
-		PRInterval:     m.PRInterval,
-		QRSDuration:    m.QRSDuration,
-		QTInterval:     m.QTInterval,
-		QTcInterval:    m.QTcInterval,
-		PAxis:          m.PAxis,
-		QRSAxis:        m.QRSAxis,
-		TAxis:          m.TAxis,
+		HeartRate:      ecgpdf.MeasuredNonZero(m.HeartRate),
+		PRInterval:     ecgpdf.MeasuredNonZero(m.PRInterval),
+		QRSDuration:    ecgpdf.MeasuredNonZero(m.QRSDuration),
+		QTInterval:     ecgpdf.MeasuredNonZero(m.QTInterval),
+		QTcInterval:    ecgpdf.MeasuredNonZero(m.QTcInterval),
+		PAxis:          ecgpdf.MeasuredNonZero(m.PAxis),
+		QRSAxis:        ecgpdf.MeasuredNonZero(m.QRSAxis),
+		TAxis:          ecgpdf.MeasuredNonZero(m.TAxis),
 		ShowAmplitudes: true,
 		V5RAmplitude:   m.V5RAmplitude,
 		V1SAmplitude:   m.V1SAmplitude,
-		Filter:         "H50–150 Hz",
-		SampleRate:     float64(nd.Record.SampleRate),
-		ScaleUV:        nd.Record.Scale,
-		Leads:          leadMap,
-		Statements:     sts,
+		// Filter is deliberately left empty: the PEC parser reads no filter
+		// setting from the .DAT, so any band printed here would be an assertion
+		// the source file never made. The renderer states the absence instead.
+		SampleRate: float64(nd.Record.SampleRate),
+		ScaleUV:    nd.Record.Scale,
+		Leads:      leadMap,
+		Statements: sts,
 	}
 }
 

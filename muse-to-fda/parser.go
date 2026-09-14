@@ -5,10 +5,17 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 )
+
+// ErrPerLeadScale is returned when a MUSE document scales its leads
+// differently. This model holds one amplitude scale for the whole recording,
+// so such a document cannot be represented faithfully and is refused rather
+// than rendered at the first lead's gain.
+var ErrPerLeadScale = errors.New("muse-to-fda: per-lead amplitude scales")
 
 // Lead index in the 12-lead output order: I, II, III, aVR, aVL, aVF, V1..V6.
 const (
@@ -147,10 +154,28 @@ func parseWaveforms(d *MuseData, waveforms []museWaveform) error {
 			}
 		}
 
-		// Sensitivity / baseline from the first available lead.
-		if d.Sensitivity == 0 && len(w.Leads) > 0 {
-			d.Sensitivity = atof(w.Leads[0].AmplitudeUnitsPerBit)
-			d.Baseline = atof(w.Leads[0].FirstSampleBaseline)
+		// MUSE states LeadAmplitudeUnitsPerBit per lead, and so does aECG — but
+		// the aECG writer used here (hl7v3-aecg AddRhythmSeries) takes one
+		// scale for the whole series and cannot express more. So unlike the
+		// aECG read path, which now carries per-lead scales end to end, this
+		// conversion genuinely cannot represent a recording whose leads differ.
+		//
+		// Refused rather than written at the first lead's scale, which would
+		// silently halve or double the others' amplitudes in the output file
+		// and in everything rendered from it. Lifting this needs a per-lead
+		// scale in hl7v3-aecg.
+		for _, ld := range w.Leads {
+			sens := atof(ld.AmplitudeUnitsPerBit)
+			if sens == 0 {
+				continue
+			}
+			if d.Sensitivity == 0 {
+				d.Sensitivity = sens
+				d.Baseline = atof(ld.FirstSampleBaseline)
+			} else if sens != d.Sensitivity {
+				return fmt.Errorf("%w: lead %s is scaled at %g µV/LSB where an earlier lead is at %g µV/LSB",
+					ErrPerLeadScale, strings.TrimSpace(ld.ID), sens, d.Sensitivity)
+			}
 		}
 	}
 	return nil
