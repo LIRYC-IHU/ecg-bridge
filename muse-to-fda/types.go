@@ -22,6 +22,11 @@ type MuseData struct {
 	PatientName string // "LAST^FIRST"
 	PatientSex  string // "M" / "F" / ""
 	PatientAge  string // e.g. "050Y"
+	// PatientDOB is never present in a MUSE export file. It exists so an establishment's
+	// date of birth can be injected, which is what keeps the rendered report's
+	// identity internally consistent — a name from the HIS above an age from the
+	// acquisition device is the mismatch a clinician cross-checks on.
+	PatientDOB string // YYYYMMDD, or "" when unknown
 
 	// Signal characteristics
 	SamplingRate float64 // Hz (SampleBase)
@@ -59,6 +64,8 @@ type MuseData struct {
 func (d *MuseData) Anonymize() {
 	d.PatientName = ""
 	d.PatientID = ""
+	// A date of birth identifies; an injected one must not survive anonymisation.
+	d.PatientDOB = ""
 }
 
 // ApplyMetadata overwrites patient-identity and study-date fields from ov.
@@ -78,6 +85,9 @@ func (d *MuseData) ApplyMetadata(ov *metaject.Override) {
 	}
 	if ov.Age != nil {
 		d.PatientAge = *ov.Age
+	}
+	if ov.BirthDate != nil {
+		d.PatientDOB = *ov.BirthDate
 	}
 	if ov.Datetime != nil {
 		d.StudyDate, d.StudyTime = metaject.SplitDatetime(*ov.Datetime)

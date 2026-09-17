@@ -79,7 +79,7 @@ func buildAECG(d *MuseData) (string, error) {
 		d.PatientName,
 		d.PatientID,
 		types.GetGender(d.PatientSex),
-		"", // no birth date
+		d.PatientDOB, // not in the export; present when injected
 		types.RACE_OTHER,
 	)
 
@@ -87,7 +87,9 @@ func buildAECG(d *MuseData) (string, error) {
 	if d.PatientName == "" {
 		sdp.Name = nil
 	}
-	sdp.BirthTime = nil
+	if d.PatientDOB == "" {
+		sdp.BirthTime = nil
+	}
 	if d.PatientAge != "" {
 		sdp.SetAge(d.PatientAge)
 	}

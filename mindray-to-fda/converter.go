@@ -68,13 +68,15 @@ func buildAECG(md *MindrayData) (string, error) {
 	// Subject
 	h.SetSubject(rootID, "trialSubject", types.SUBJECT_ROLE_ENROLLED)
 	gender := types.GetGender(md.Patient.Gender)
-	h.SetSubjectDemographics(md.Patient.Name, md.Patient.PatientID, gender, "", types.RACE_OTHER)
+	h.SetSubjectDemographics(md.Patient.Name, md.Patient.PatientID, gender, md.Patient.BirthDate, types.RACE_OTHER)
 
 	sdp := h.HL7AEcg.ComponentOf.TimepointEvent.ComponentOf.SubjectAssignment.Subject.TrialSubject.SubjectDemographicPerson
 	if md.Patient.Name == "" {
 		sdp.Name = nil
 	}
-	sdp.BirthTime = nil
+	if md.Patient.BirthDate == "" {
+		sdp.BirthTime = nil
+	}
 	if md.Patient.Paced {
 		sdp.SetPaced(true)
 	}

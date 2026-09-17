@@ -18,6 +18,11 @@ type PatientData struct {
 	Name      string
 	PatientID string
 	Gender    string // "M", "F", "UN"
+	// BirthDate is never present in a Mindray file. It exists so an establishment's
+	// date of birth can be injected, which is what keeps the rendered report's
+	// identity internally consistent — a name from the HIS above an age from the
+	// acquisition device is the mismatch a clinician cross-checks on.
+	BirthDate string // YYYYMMDD, or "" when unknown
 	Paced     bool
 	Location  string
 	StartTime time.Time
@@ -30,6 +35,8 @@ type PatientData struct {
 func (d *MindrayData) Anonymize() {
 	d.Patient.Name = ""
 	d.Patient.PatientID = ""
+	// A date of birth identifies; an injected one must not survive anonymisation.
+	d.Patient.BirthDate = ""
 }
 
 // ApplyMetadata overwrites patient-identity and acquisition-date fields from ov.
@@ -46,6 +53,9 @@ func (d *MindrayData) ApplyMetadata(ov *metaject.Override) {
 	}
 	if ov.Gender != nil {
 		d.Patient.Gender = *ov.Gender
+	}
+	if ov.BirthDate != nil {
+		d.Patient.BirthDate = *ov.BirthDate
 	}
 	if ov.Datetime != nil {
 		if t, ok := metaject.ParseDatetime(*ov.Datetime); ok {
