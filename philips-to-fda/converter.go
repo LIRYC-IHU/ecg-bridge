@@ -83,7 +83,7 @@ func buildAECG(d *philipstodicom.PhilipsData) (string, error) {
 		d.PatientName,
 		d.PatientID,
 		types.GetGender(d.PatientSex),
-		"", // no birth date in Philips XML
+		d.PatientDOB, // absent from the file; present when injected
 		types.RACE_OTHER,
 	)
 
@@ -91,7 +91,9 @@ func buildAECG(d *philipstodicom.PhilipsData) (string, error) {
 	if d.PatientName == "" {
 		sdp.Name = nil
 	}
-	sdp.BirthTime = nil
+	if d.PatientDOB == "" {
+		sdp.BirthTime = nil
+	}
 	if d.PatientAge != "" {
 		sdp.SetAge(d.PatientAge)
 	}
