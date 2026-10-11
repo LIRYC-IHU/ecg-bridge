@@ -8,26 +8,103 @@ import (
 	"time"
 )
 
-// dataMarker precedes the compressed rhythm block and its parameter header.
-var dataMarker = []byte{0x00, 0x09, 0x02}
+// The file is a directory of units (layout read by nwHCOM.dll Nth_UntReadSell2,
+// 0x1005f82c; every multi-byte field is big-endian):
+//
+//	0x1e      u16 unit count n
+//	0x20      n entries of 16 bytes: u16 type, u16 sub, u32 size, 8 bytes
+//	0x20+16n  the units, back to back, in entry order
+//
+// Each unit starts with its own u16 type, u16 sub, u32 size.
+const (
+	offUnitCount = 0x1e
+	offUnitDir   = 0x20
+	unitDirEntry = 16
+	unitWave     = 9 // rhythm waveform unit
+)
 
-// leadOrder is the on-file order of the 8 measured leads in the bitstream.
-var leadOrder = []string{"I", "II", "V1", "V2", "V3", "V4", "V5", "V6"}
+// Offsets inside the waveform unit (type 9), from the unit start.
+const (
+	waveInterval = 0x0a // u16 µs/sample
+	waveScale    = 0x0c // u16 nV/digit
+	waveSamples  = 0x0e // u32 samples per lead
+	waveCompress = 0x12 // u16 0 = raw int16, otherwise Huffman
+	waveLeads    = 0x14 // u16 lead count
+	waveCodes    = 0x18 // u16 lead code per lead; then u32 data length, then data
+	maxWaveLeads = 8    // >8 leads use other layouts in the DLL, not supported
+)
+
+// leadCodeName maps the on-file lead code to its name (the DLL stores only the
+// 8 independent leads; III, aVR, aVL, aVF are derived).
+var leadCodeName = map[uint16]string{
+	1: "I", 2: "II", 3: "III", 4: "aVR", 5: "aVL", 6: "aVF",
+	7: "V1", 8: "V2", 9: "V3", 10: "V4", 11: "V5", 12: "V6",
+}
+
+// findUnit returns the offset of the first unit of type typ.
+func findUnit(dat []byte, typ uint16) (int, error) {
+	if len(dat) < offUnitDir {
+		return 0, fmt.Errorf("file too short for a unit directory")
+	}
+	n := int(binary.BigEndian.Uint16(dat[offUnitCount:]))
+	off := offUnitDir + n*unitDirEntry
+	if off > len(dat) {
+		return 0, fmt.Errorf("unit directory (%d entries) runs past end of file", n)
+	}
+	for i := 0; i < n; i++ {
+		e := dat[offUnitDir+i*unitDirEntry:]
+		size := int(binary.BigEndian.Uint32(e[4:8]))
+		if binary.BigEndian.Uint16(e[0:2]) == typ {
+			if off+size > len(dat) {
+				return 0, fmt.Errorf("unit type %d at %#x runs past end of file", typ, off)
+			}
+			return off, nil
+		}
+		off += size
+	}
+	return 0, fmt.Errorf("no unit of type %d in directory", typ)
+}
 
 // ParseFile parses a Fukuda .ECG file: header parameters, acquisition datetime,
 // and the decoded waveforms.
 func ParseFile(dat []byte) (*FukudaData, error) {
-	mk := bytes.LastIndex(dat, dataMarker)
-	if mk < 0 || mk+44 > len(dat) {
-		return nil, fmt.Errorf("data marker 00 09 02 not found")
+	u, err := findUnit(dat, unitWave)
+	if err != nil {
+		return nil, err
 	}
-	interval := int(binary.BigEndian.Uint16(dat[mk+10 : mk+12])) // µs/sample
-	avm := int(binary.BigEndian.Uint16(dat[mk+12 : mk+14]))      // nV/digit
-	nSamples := int(binary.BigEndian.Uint32(dat[mk+14 : mk+18]))
-	nLeads := int(binary.BigEndian.Uint16(dat[mk+20 : mk+22]))
-	if interval <= 0 || nSamples <= 0 || nLeads <= 0 || nLeads > len(leadOrder) {
+	if u+waveCodes > len(dat) {
+		return nil, fmt.Errorf("waveform unit truncated")
+	}
+	be16 := func(off int) int { return int(binary.BigEndian.Uint16(dat[u+off:])) }
+	interval := be16(waveInterval)
+	avm := be16(waveScale)
+	nSamples := int(binary.BigEndian.Uint32(dat[u+waveSamples:]))
+	compressed := be16(waveCompress) != 0
+	nLeads := be16(waveLeads)
+	if interval <= 0 || nSamples <= 0 || nLeads <= 0 {
 		return nil, fmt.Errorf("implausible header: interval=%d nSamples=%d nLeads=%d", interval, nSamples, nLeads)
 	}
+	if nLeads > maxWaveLeads {
+		return nil, fmt.Errorf("unsupported waveform layout: %d leads (max %d)", nLeads, maxWaveLeads)
+	}
+	dataOff := u + waveCodes + 2*nLeads + 4
+	if dataOff > len(dat) {
+		return nil, fmt.Errorf("waveform unit truncated")
+	}
+	names := make([]string, nLeads)
+	for i := range names {
+		code := uint16(be16(waveCodes + 2*i))
+		name, ok := leadCodeName[code]
+		if !ok {
+			return nil, fmt.Errorf("unknown lead code %d", code)
+		}
+		names[i] = name
+	}
+	length := int(binary.BigEndian.Uint32(dat[dataOff-4:]))
+	if dataOff+length > len(dat) {
+		return nil, fmt.Errorf("%w: waveform data length %d runs past end of file", ErrTruncatedStream, length)
+	}
+	stream := dat[dataOff : dataOff+length]
 
 	fd := &FukudaData{
 		Record: RecordParams{
@@ -44,16 +121,39 @@ func ParseFile(dat []byte) (*FukudaData, error) {
 	}
 	fillDemographics(dat, &fd.Patient)
 
-	startBit := (mk + 44) * 8
-	decoded, err := DecodeAll(dat, startBit, nLeads, nSamples)
+	var decoded [][]int32
+	if compressed {
+		decoded, err = DecodeAll(stream, 0, nLeads, nSamples)
+	} else {
+		decoded, err = rawLeads(stream, nLeads, nSamples)
+	}
 	if err != nil {
 		return nil, err
 	}
 	fd.Leads = make(map[string][]int32, nLeads)
-	for i := 0; i < nLeads; i++ {
-		fd.Leads[leadOrder[i]] = decoded[i]
+	for i, name := range names {
+		fd.Leads[name] = decoded[i]
+	}
+	if fd.Leads["I"] == nil || fd.Leads["II"] == nil {
+		return nil, fmt.Errorf("leads I and II are required to derive the limb leads")
 	}
 	return fd, nil
+}
+
+// rawLeads reads an uncompressed waveform (compression flag 0): the DLL copies
+// it as-is, as 16-bit samples in the same big-endian words as the Huffman
+// stream, with the same lead split.
+// ponytail: no uncompressed sample file to confirm byte order; BE inferred from
+// Nth_UntSwapCtl swapping the unit before both paths.
+func rawLeads(stream []byte, nLeads, nSamples int) ([][]int32, error) {
+	flat := make([]int32, len(stream)/2)
+	for i := range flat {
+		flat[i] = int32(int16(binary.BigEndian.Uint16(stream[2*i:])))
+	}
+	if len(flat) < nLeads*nSamples {
+		return nil, fmt.Errorf("%w: raw waveform holds %d of %d samples", ErrTruncatedStream, len(flat), nLeads*nSamples)
+	}
+	return splitLeads(flat, nLeads, nSamples), nil
 }
 
 // findDatetime scans for the acquisition timestamp, stored as six big-endian

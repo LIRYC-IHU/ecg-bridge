@@ -60,20 +60,28 @@ func (b *bitReader) bits(n int) int {
 	return v
 }
 
-// DecodeAll decodes nLeads*nSamples samples from the bitstream starting at
-// startBit and splits them into per-lead slices. Leads are stored sequentially
-// (I, II, V1..V6) with predictor state carried across the whole stream.
+// DecodeAll decodes the bitstream starting at startBit and splits it into
+// nLeads slices of nSamples. Leads are stored sequentially with predictor state
+// carried across the whole stream.
 //
-// A stream that ends before nLeads*nSamples samples have been produced is an
-// error. It used to be padded with zeros, which silently turned a truncated
-// file into a flat isoelectric segment — indistinguishable, on the trace, from
-// a recorded asystole.
+// Mirrors nwHCOM.dll Nth_huffman_expan (0x100dc370) and its caller
+// Nth_UntReadSell2: decoding runs until the end marker or until the words of
+// data are used up, then the decoded run is cut into nLeads equal blocks of
+// len/nLeads samples, of which each lead keeps the first nSamples. data must
+// therefore hold exactly the stream (the unit's length field), not the file
+// tail behind it.
+//
+// A stream that yields fewer than nLeads*nSamples samples is an error. It used
+// to be padded with zeros, which silently turned a truncated file into a flat
+// isoelectric segment — indistinguishable, on the trace, from a recorded
+// asystole. (The vendor software zero-fills here; we refuse instead.)
 func DecodeAll(data []byte, startBit, nLeads, nSamples int) ([][]int32, error) {
 	br := &bitReader{data: data, pos: startBit}
 	total := nLeads * nSamples
+	endBit := len(data) / 2 * 16 // the DLL counts whole 16-bit words
 	flat := make([]int32, 0, total)
 	var prev2, prev1 int32 // x[n-2], x[n-1]
-	for len(flat) < total {
+	for br.pos < endBit {
 		node := int32(huffRoot)
 		for node >= huffRoot {
 			node = huffTree[3*node+int32(br.bit())]
@@ -88,7 +96,7 @@ func DecodeAll(data []byte, startBit, nLeads, nSamples int) ([][]int32, error) {
 		case node == 11:
 			delta = int32(int8(br.bits(8))) // 8-bit signed escape
 		default: // node == 12
-			delta = int32(int16(br.bits(16))) // 16-bit signed escape
+			delta = int32(int16(br.bits(16))) // 16-bit escape; the DLL reads it unsigned, same result mod 2^16
 		}
 		x := 2*prev1 - prev2 + delta
 		prev2, prev1 = prev1, x
@@ -97,9 +105,17 @@ func DecodeAll(data []byte, startBit, nLeads, nSamples int) ([][]int32, error) {
 	if len(flat) < total {
 		return nil, fmt.Errorf("%w: bitstream ended after %d of %d samples", ErrTruncatedStream, len(flat), total)
 	}
+	return splitLeads(flat, nLeads, nSamples), nil
+}
+
+// splitLeads cuts flat into nLeads blocks of len(flat)/nLeads samples and keeps
+// the first nSamples of each, as Nth_UntReadSell2 does when a unit holds more
+// samples than its header announces.
+func splitLeads(flat []int32, nLeads, nSamples int) [][]int32 {
+	stride := len(flat) / nLeads
 	leads := make([][]int32, nLeads)
-	for i := 0; i < nLeads; i++ {
-		leads[i] = flat[i*nSamples : (i+1)*nSamples]
+	for i := range leads {
+		leads[i] = flat[i*stride : i*stride+nSamples]
 	}
-	return leads, nil
+	return leads
 }

@@ -2,11 +2,14 @@ package fukudatofda
 
 import "github.com/LIRYC-IHU/hl7v3-aecg/hl7aecg/types"
 
-// DeriveLeads computes the 4 augmented leads from I and II.
+// DeriveLeads computes the 4 augmented leads from I and II, exactly as the
+// Fukuda software does (nwHCOM.dll ECG_III/AVR/AVL/AVF_calc, 0x1005f6aa..0x1005f7ca):
 // III = II - I
-// aVR = -(I + II) / 2
-// aVL = (2I - II) / 2
-// aVF = (2II - I) / 2
+// aVR = -((I + II) / 2)
+// aVL = I - II/2
+// aVF = II - I/2
+// with C integer division (truncation toward zero, same as Go). Halving only the
+// other lead, not (2I - II), matters: the two differ by 1 digit on odd samples.
 func DeriveLeads(i, ii []int32) (iii, avr, avl, avf []int32) {
 	n := len(i)
 	iii = make([]int32, n)
@@ -16,8 +19,8 @@ func DeriveLeads(i, ii []int32) (iii, avr, avl, avf []int32) {
 	for t := 0; t < n; t++ {
 		iii[t] = ii[t] - i[t]
 		avr[t] = -(i[t] + ii[t]) / 2
-		avl[t] = (2*i[t] - ii[t]) / 2
-		avf[t] = (2*ii[t] - i[t]) / 2
+		avl[t] = i[t] - ii[t]/2
+		avf[t] = ii[t] - i[t]/2
 	}
 	return
 }
