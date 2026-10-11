@@ -47,21 +47,22 @@ func TestParseDATA000(t *testing.T) {
 }
 
 func TestDeriveLeads(t *testing.T) {
-	i := []int32{10, 20, 30}
-	ii := []int32{40, 60, 80}
+	// Expected values follow nwHCOM.dll ECG_*_calc; odd and negative inputs
+	// pin the truncation, where (2I-II)/2 and I-II/2 disagree.
+	i := []int32{10, 1, -3, 0}
+	ii := []int32{40, 1, -5, -1}
+	want := [4][]int32{
+		{30, 0, -2, -1}, // III
+		{-25, -1, 4, 0}, // aVR
+		{-10, 1, -1, 0}, // aVL
+		{35, 1, -4, -1}, // aVF
+	}
 	iii, avr, avl, avf := DeriveLeads(i, ii)
-	for n := range i {
-		if iii[n] != ii[n]-i[n] {
-			t.Errorf("III[%d] wrong", n)
-		}
-		if avr[n] != -(i[n]+ii[n])/2 {
-			t.Errorf("aVR[%d] wrong", n)
-		}
-		if avl[n] != (2*i[n]-ii[n])/2 {
-			t.Errorf("aVL[%d] wrong", n)
-		}
-		if avf[n] != (2*ii[n]-i[n])/2 {
-			t.Errorf("aVF[%d] wrong", n)
+	for k, got := range [4][]int32{iii, avr, avl, avf} {
+		for n := range i {
+			if got[n] != want[k][n] {
+				t.Errorf("lead %d sample %d: got %d, want %d", k, n, got[n], want[k][n])
+			}
 		}
 	}
 }

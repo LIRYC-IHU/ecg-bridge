@@ -187,3 +187,78 @@ func TestBitReaderReadsMSBFirstWithinBigEndianWords(t *testing.T) {
 		t.Errorf("second byte = %08b, want 01000001", got)
 	}
 }
+
+// buildECG assembles a minimal .ECG: a one-entry unit directory holding a
+// waveform unit (type 9) with the given lead codes, compression flag and data.
+func buildECG(codes []uint16, nSamples int, compress uint16, data []byte) []byte {
+	be16 := func(b []byte, v uint16) []byte { return append(b, byte(v>>8), byte(v)) }
+	be32 := func(b []byte, v uint32) []byte { return be16(be16(b, uint16(v>>16)), uint16(v)) }
+
+	var unit []byte
+	unit = be16(unit, unitWave)
+	unit = be16(unit, 0x0200)
+	unit = be32(unit, 0) // size, patched below
+	unit = be16(unit, 0x000b)
+	unit = be16(unit, 2000) // µs/sample
+	unit = be16(unit, 4880) // nV/digit
+	unit = be32(unit, uint32(nSamples))
+	unit = be16(unit, compress)
+	unit = be16(unit, uint16(len(codes)))
+	unit = be16(unit, 0x0010)
+	for _, c := range codes {
+		unit = be16(unit, c)
+	}
+	unit = be32(unit, uint32(len(data)))
+	unit = append(unit, data...)
+	size := uint32(len(unit))
+	copy(unit[4:8], []byte{byte(size >> 24), byte(size >> 16), byte(size >> 8), byte(size)})
+
+	file := make([]byte, offUnitCount)
+	file = be16(file, 1)
+	file = be16(file, unitWave)
+	file = be16(file, 0x0200)
+	file = be32(file, size)
+	file = append(file, make([]byte, 8)...)
+	return append(file, unit...)
+}
+
+// Lead order comes from the header codes, and the flag selects raw vs Huffman.
+func TestParseFileReadsUnitDirectory(t *testing.T) {
+	const n = 6
+	ii := []int32{1, 2, 3, 4, 5, 6}
+	i := []int32{-1, -2, -3, -4, -5, -6}
+	flat := append(append([]int32(nil), ii...), i...)
+
+	var raw []byte
+	for _, v := range flat {
+		raw = append(raw, byte(uint16(v)>>8), byte(v))
+	}
+	for name, file := range map[string][]byte{
+		"huffman": buildECG([]uint16{2, 1}, n, 3, encode(t, flat)),
+		"raw":     buildECG([]uint16{2, 1}, n, 0, raw),
+	} {
+		fd, err := ParseFile(file)
+		if err != nil {
+			t.Fatalf("%s: ParseFile: %v", name, err)
+		}
+		if fd.Record.SampleRate != 500 || fd.Record.TotalSamples != n {
+			t.Errorf("%s: rate=%d samples=%d", name, fd.Record.SampleRate, fd.Record.TotalSamples)
+		}
+		for s := 0; s < n; s++ {
+			if fd.Leads["II"][s] != ii[s] || fd.Leads["I"][s] != i[s] {
+				t.Fatalf("%s: sample %d: I=%d II=%d, want I=%d II=%d",
+					name, s, fd.Leads["I"][s], fd.Leads["II"][s], i[s], ii[s])
+			}
+		}
+	}
+}
+
+// When a stream holds more than nLeads*nSamples samples, the DLL cuts it into
+// nLeads equal blocks and keeps the head of each — not consecutive nSamples.
+func TestSplitLeadsUsesEqualBlocks(t *testing.T) {
+	flat := []int32{10, 11, 12, 13, 20, 21, 22, 23}
+	got := splitLeads(flat, 2, 3)
+	if got[0][0] != 10 || got[1][0] != 20 || len(got[1]) != 3 {
+		t.Fatalf("got %v, want [[10 11 12] [20 21 22]]", got)
+	}
+}
