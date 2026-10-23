@@ -109,23 +109,30 @@ func BuildDICOM(d *FDAData) (dicom.Dataset, error) {
 
 // buildWaveformItem creates one WaveformSequence item from a map of lead data.
 func buildWaveformItem(d *FDAData, originality, label string, leads map[string][]int32) ([]*dicom.Element, error) {
-	// Collect leads in canonical order, find max length
+	// Collect the leads present, in canonical order, and find max length.
+	// An absent lead is left out of the channel list: writing it as a channel
+	// of zeros under its standard label would present a flat line as signal.
+	names := make([]string, 0, len(leadOrder))
 	orderedLeads := make([][]int32, 0, len(leadOrder))
 	numSamples := 0
 	for _, name := range leadOrder {
 		samples := leads[name]
+		if len(samples) == 0 {
+			continue
+		}
+		names = append(names, name)
 		orderedLeads = append(orderedLeads, samples)
 		if len(samples) > numSamples {
 			numSamples = len(samples)
 		}
 	}
-	if numSamples == 0 {
-		numSamples = 1
+	if len(names) == 0 {
+		return nil, fmt.Errorf("%s waveform: no recognised lead in the source file", label)
 	}
 
 	// ChannelDefinitionSequence
-	channelItems := make([][]*dicom.Element, 0, len(leadOrder))
-	for _, name := range leadOrder {
+	channelItems := make([][]*dicom.Element, 0, len(names))
+	for _, name := range names {
 		ch, err := buildChannelDef(name, d)
 		if err != nil {
 			return nil, fmt.Errorf("channel %s: %w", name, err)
@@ -154,7 +161,7 @@ func buildWaveformItem(d *FDAData, originality, label string, leads map[string][
 		// rescale any lead recorded at a different gain — half-gain precordials
 		// being the case that occurs in practice.
 		sensitivity := d.Sensitivity
-		if s, ok := d.LeadSensitivity[leadOrder[i]]; ok && s > 0 {
+		if s, ok := d.LeadSensitivity[names[i]]; ok && s > 0 {
 			sensitivity = s
 		}
 		scaledLeads[i] = make([]int16, len(lead))
@@ -174,7 +181,7 @@ func buildWaveformItem(d *FDAData, originality, label string, leads map[string][
 
 	item := []*dicom.Element{
 		mustElem(tag.WaveformOriginality, []string{originality}),
-		mustElem(tag.NumberOfWaveformChannels, []int{len(leadOrder)}),
+		mustElem(tag.NumberOfWaveformChannels, []int{len(names)}),
 		mustElem(tag.NumberOfWaveformSamples, []int{numSamples}),
 		mustElem(tag.SamplingFrequency, []string{fmtFloat(d.SamplingRate)}),
 		mustElem(tag.MultiplexGroupLabel, []string{label}),

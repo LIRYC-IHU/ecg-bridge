@@ -3,6 +3,7 @@ package fdatodicom
 import (
 	"fmt"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 
@@ -323,7 +324,11 @@ func parseSequenceSet(ss *types.SequenceSet) (sequenceData, error) {
 		}
 		// Voltage sequence
 		leadName := leadCodeToName(seq.Code.Lead.Code)
-		if leadName == "" || seq.Value == nil {
+		if leadName == "" {
+			fmt.Fprintf(os.Stderr, "warning: unrecognised lead code %q, sequence skipped\n", seq.Code.Lead.Code)
+			continue
+		}
+		if seq.Value == nil {
 			continue
 		}
 		var digits []int
@@ -370,9 +375,10 @@ func parseSequenceSet(ss *types.SequenceSet) (sequenceData, error) {
 }
 
 // leadCodeToName converts a MDC_ECG_LEAD_* code to a short name like "I", "V1".
+// The match ignores case: files in the wild write MDC_ECG_LEAD_aVR as often as
+// the standard MDC_ECG_LEAD_AVR.
 func leadCodeToName(code types.LeadCode) string {
-	s := string(code)
-	switch s {
+	switch strings.ToUpper(strings.TrimSpace(string(code))) {
 	case "MDC_ECG_LEAD_I":
 		return "I"
 	case "MDC_ECG_LEAD_II":
