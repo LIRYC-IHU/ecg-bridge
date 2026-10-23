@@ -780,3 +780,57 @@ func leadComponent(leadCode, scaleValue, scaleUnit, digits string) types.Sequenc
 		},
 	}
 }
+
+// Issue #14: some files write the augmented limb leads with a lowercase "a"
+// (MDC_ECG_LEAD_aVR). Those leads were dropped silently, then written as
+// channels of zeros.
+func TestParseAcceptsLowercaseAugmentedLeadCodes(t *testing.T) {
+	ss := &types.SequenceSet{Component: []types.SequenceComponent{
+		leadComponent("MDC_ECG_LEAD_aVR", "5", "uV", "1 2 3"),
+		leadComponent("MDC_ECG_LEAD_aVL", "5", "uV", "1 2 3"),
+		leadComponent("MDC_ECG_LEAD_aVF", "5", "uV", "1 2 3"),
+	}}
+
+	seq, err := parseSequenceSet(ss)
+	if err != nil {
+		t.Fatalf("parseSequenceSet: %v", err)
+	}
+	for _, name := range []string{"aVR", "aVL", "aVF"} {
+		if len(seq.leads[name]) != 3 {
+			t.Errorf("lead %s: %d samples, want 3", name, len(seq.leads[name]))
+		}
+	}
+}
+
+// A lead absent from the source must be left out of the DICOM channel list,
+// never written as a flat channel under its standard label.
+func TestBuildOmitsAbsentLeads(t *testing.T) {
+	d := &FDAData{
+		SamplingRate: 500,
+		Sensitivity:  5,
+		Leads:        map[string][]int32{"I": {1, 2, 3}, "II": {4, 5, 6}},
+	}
+	item, err := buildWaveformItem(d, "ORIGINAL", "RHYTHM", d.Leads)
+	if err != nil {
+		t.Fatalf("buildWaveformItem: %v", err)
+	}
+	for _, e := range item {
+		if e.Tag == tag.NumberOfWaveformChannels {
+			if got := e.Value.GetValue().([]int)[0]; got != 2 {
+				t.Errorf("NumberOfWaveformChannels = %d, want 2", got)
+			}
+		}
+		if e.Tag == tag.ChannelDefinitionSequence {
+			if got := len(e.Value.GetValue().([]*dicom.SequenceItemValue)); got != 2 {
+				t.Errorf("ChannelDefinitionSequence has %d items, want 2", got)
+			}
+		}
+	}
+}
+
+func TestBuildRefusesWaveformWithoutLeads(t *testing.T) {
+	d := &FDAData{SamplingRate: 500, Sensitivity: 5}
+	if _, err := buildWaveformItem(d, "ORIGINAL", "RHYTHM", nil); err == nil {
+		t.Fatal("expected an error for a waveform with no lead")
+	}
+}
