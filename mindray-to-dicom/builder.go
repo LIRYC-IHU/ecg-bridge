@@ -50,6 +50,7 @@ func BuildDICOM(md *mindraytofda.MindrayData, uids dicomconf.UIDs) (dicom.Datase
 	add(&ds, tag.PatientName, []string{md.Patient.Name})
 	add(&ds, tag.PatientID, []string{md.Patient.PatientID})
 	add(&ds, tag.PatientSex, []string{dicomGender(md.Patient.Gender)})
+	add(&ds, tag.PatientBirthDate, []string{md.Patient.BirthDate})
 	add(&ds, tag.StudyInstanceUID, []string{uids.Study})
 	add(&ds, tag.SeriesInstanceUID, []string{uids.Series})
 	add(&ds, tag.StudyID, []string{"1"})

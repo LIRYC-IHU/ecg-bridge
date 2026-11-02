@@ -48,6 +48,7 @@ func BuildDICOM(d *musetofda.MuseData, uids dicomconf.UIDs) (dicom.Dataset, erro
 	add(&ds, tag.PatientID, []string{d.PatientID})
 	add(&ds, tag.PatientSex, []string{d.PatientSex})
 	add(&ds, tag.PatientAge, []string{d.PatientAge})
+	add(&ds, tag.PatientBirthDate, []string{d.PatientDOB})
 	add(&ds, tag.StudyInstanceUID, []string{studyUID})
 	add(&ds, tag.SeriesInstanceUID, []string{seriesUID})
 	add(&ds, tag.StudyID, []string{"1"})

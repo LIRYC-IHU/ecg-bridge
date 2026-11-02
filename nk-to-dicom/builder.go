@@ -40,6 +40,7 @@ func BuildDICOM(nd *nktofda.NKData, uids dicomconf.UIDs) (*dicom.Dataset, error)
 		mustElem(tag.PatientName, []string{fullName}),
 		mustElem(tag.PatientID, []string{nd.Patient.PatientID}),
 		mustElem(tag.PatientSex, []string{nd.Patient.Gender}),
+		mustElem(tag.PatientBirthDate, []string{nd.Patient.BirthDate}),
 	)
 
 	// General Study Module
@@ -52,6 +53,10 @@ func BuildDICOM(nd *nktofda.NKData, uids dicomconf.UIDs) (*dicom.Dataset, error)
 		mustElem(tag.StudyInstanceUID, []string{studyUID}),
 		mustElem(tag.StudyDate, []string{studyDate}),
 		mustElem(tag.StudyTime, []string{studyTime}),
+		mustElem(tag.StudyID, []string{"1"}),
+		mustElem(tag.ContentDate, []string{studyDate}),
+		mustElem(tag.ContentTime, []string{studyTime}),
+		mustElem(tag.AcquisitionDateTime, []string{studyDate + studyTime}),
 		mustElem(tag.AccessionNumber, []string{nd.Patient.PatientID}),
 	)
 

@@ -42,6 +42,7 @@ func BuildDICOM(d *PhilipsData, uids dicomconf.UIDs) (dicom.Dataset, error) {
 	add(&ds, tag.PatientID, []string{d.PatientID})
 	add(&ds, tag.PatientSex, []string{d.PatientSex})
 	add(&ds, tag.PatientAge, []string{d.PatientAge})
+	add(&ds, tag.PatientBirthDate, []string{d.PatientDOB})
 	add(&ds, tag.StudyInstanceUID, []string{uids.Study})
 	add(&ds, tag.SeriesInstanceUID, []string{uids.Series})
 	add(&ds, tag.StudyID, []string{"1"})

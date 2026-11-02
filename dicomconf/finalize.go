@@ -43,6 +43,22 @@ func Finalize(ds *dicom.Dataset) {
 	ensureString(ds, tag.ImplementationClassUID, implementationClassUID)
 	ensureString(ds, tag.ImplementationVersionName, implementationVersionName)
 
+	// Type 2 attributes of the 12-Lead ECG IOD: they must be present, and are
+	// left empty when the source carries no value.
+	for _, t := range []tag.Tag{
+		tag.PatientBirthDate,
+		tag.ReferringPhysicianName,
+		tag.AccessionNumber,
+		tag.StudyID,
+	} {
+		ensureString(ds, t, "")
+	}
+	if !hasTag(ds, tag.AcquisitionContextSequence) {
+		if el, err := dicom.NewElement(tag.AcquisitionContextSequence, [][]*dicom.Element{}); err == nil {
+			ds.Elements = append(ds.Elements, el)
+		}
+	}
+
 	// Waveform sample data is 16-bit, so its VR must be OW. Builders create it
 	// from a byte slice (which defaults to OB); correct it wherever it appears,
 	// including inside the WaveformSequence items.

@@ -38,6 +38,7 @@ func BuildDICOM(fd *fukudatofda.FukudaData, uids dicomconf.UIDs) (*dicom.Dataset
 		mustElem(tag.PatientName, []string{fullName}),
 		mustElem(tag.PatientID, []string{fd.Patient.PatientID}),
 		mustElem(tag.PatientSex, []string{fd.Patient.Gender}),
+		mustElem(tag.PatientBirthDate, []string{fd.Patient.BirthDate}),
 	)
 
 	// General Study Module.
@@ -50,6 +51,10 @@ func BuildDICOM(fd *fukudatofda.FukudaData, uids dicomconf.UIDs) (*dicom.Dataset
 		mustElem(tag.StudyInstanceUID, []string{studyUID}),
 		mustElem(tag.StudyDate, []string{studyDate}),
 		mustElem(tag.StudyTime, []string{studyTime}),
+		mustElem(tag.StudyID, []string{"1"}),
+		mustElem(tag.ContentDate, []string{studyDate}),
+		mustElem(tag.ContentTime, []string{studyTime}),
+		mustElem(tag.AcquisitionDateTime, []string{studyDate + studyTime}),
 		mustElem(tag.AccessionNumber, []string{fd.Patient.PatientID}),
 	)
 

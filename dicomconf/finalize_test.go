@@ -29,3 +29,22 @@ func TestFinalizeCharacterSet(t *testing.T) {
 		}
 	}
 }
+
+func TestFinalizeType2(t *testing.T) {
+	dob, _ := dicom.NewElement(tag.PatientBirthDate, []string{"19600101"})
+	ds := &dicom.Dataset{Elements: []*dicom.Element{dob}}
+
+	Finalize(ds)
+
+	for _, tg := range []tag.Tag{
+		tag.ReferringPhysicianName, tag.AccessionNumber, tag.StudyID, tag.AcquisitionContextSequence,
+	} {
+		if _, err := ds.FindElementByTag(tg); err != nil {
+			t.Errorf("Type 2 %v missing", tg)
+		}
+	}
+	el, _ := ds.FindElementByTag(tag.PatientBirthDate)
+	if got := el.Value.GetValue().([]string)[0]; got != "19600101" {
+		t.Errorf("existing birth date overwritten: %q", got)
+	}
+}
