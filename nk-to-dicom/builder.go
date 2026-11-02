@@ -1,7 +1,6 @@
 package nktodicom
 
 import (
-	"crypto/rand"
 	"fmt"
 
 	dicomconf "github.com/LIRYC-IHU/ecg-bridge/dicomconf"
@@ -12,13 +11,10 @@ import (
 )
 
 // BuildDICOM constructs a DICOM dataset from NK data.
-func BuildDICOM(nd *nktofda.NKData) (*dicom.Dataset, error) {
+func BuildDICOM(nd *nktofda.NKData, uids dicomconf.UIDs) (*dicom.Dataset, error) {
 	ds := &dicom.Dataset{}
 
-	// Generate UIDs
-	studyUID := newUID()
-	seriesUID := newUID()
-	sopUID := newUID()
+	studyUID, seriesUID, sopUID := uids.Study, uids.Series, uids.SOP
 
 	// File Meta Information
 	// Transfer Syntax: Explicit VR Little Endian (1.2.840.10008.1.2.1)
@@ -44,6 +40,7 @@ func BuildDICOM(nd *nktofda.NKData) (*dicom.Dataset, error) {
 		mustElem(tag.PatientName, []string{fullName}),
 		mustElem(tag.PatientID, []string{nd.Patient.PatientID}),
 		mustElem(tag.PatientSex, []string{nd.Patient.Gender}),
+		mustElem(tag.PatientBirthDate, []string{nd.Patient.BirthDate}),
 	)
 
 	// General Study Module
@@ -56,6 +53,10 @@ func BuildDICOM(nd *nktofda.NKData) (*dicom.Dataset, error) {
 		mustElem(tag.StudyInstanceUID, []string{studyUID}),
 		mustElem(tag.StudyDate, []string{studyDate}),
 		mustElem(tag.StudyTime, []string{studyTime}),
+		mustElem(tag.StudyID, []string{"1"}),
+		mustElem(tag.ContentDate, []string{studyDate}),
+		mustElem(tag.ContentTime, []string{studyTime}),
+		mustElem(tag.AcquisitionDateTime, []string{studyDate + studyTime}),
 		mustElem(tag.AccessionNumber, []string{nd.Patient.PatientID}),
 	)
 
@@ -319,16 +320,6 @@ func interleaveLeads(leads [][]int32, nSamples int) []byte {
 		waveformBytes[i*2+1] = byte((val >> 8) & 0xFF)
 	}
 	return waveformBytes
-}
-
-func newUID() string {
-	// Generate UID using DICOM UID format: 2.25.<UUID-as-integer>
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	// Convert to decimal string
-	return fmt.Sprintf("2.25.%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d",
-		b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
-		b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15])
 }
 
 func mustElem(t tag.Tag, data any) *dicom.Element {

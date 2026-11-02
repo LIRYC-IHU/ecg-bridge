@@ -17,6 +17,10 @@ import (
 // When anonymize is true, direct patient identifiers are stripped from the output.
 // When meta is non-nil, its fields overwrite the parsed metadata (injection).
 func Convert(inputPath, outputPath string, anonymize bool, meta *metaject.Override) error {
+	raw, err := os.ReadFile(inputPath)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", inputPath, err)
+	}
 	data, err := ParseFDA(inputPath)
 	if err != nil {
 		return fmt.Errorf("parsing FDA XML: %w", err)
@@ -27,7 +31,7 @@ func Convert(inputPath, outputPath string, anonymize bool, meta *metaject.Overri
 	}
 	data.ApplyMetadata(meta)
 
-	ds, err := BuildDICOM(data)
+	ds, err := BuildDICOM(data, dicomconf.DeriveUIDs(raw, anonymize))
 	if err != nil {
 		return fmt.Errorf("building DICOM: %w", err)
 	}

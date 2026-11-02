@@ -1,10 +1,8 @@
 package musetodicom
 
 import (
-	"crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"math/big"
 
 	dicomconf "github.com/LIRYC-IHU/ecg-bridge/dicomconf"
 	musetofda "github.com/LIRYC-IHU/ecg-bridge/muse-to-fda"
@@ -23,15 +21,11 @@ const (
 // leadOrder is the canonical 12-lead order, matching MuseData lead indices.
 var leadOrder = [12]string{"I", "II", "III", "aVR", "aVL", "aVF", "V1", "V2", "V3", "V4", "V5", "V6"}
 
-
 // BuildDICOM constructs a DICOM 12-lead ECG dataset from MuseData.
-func BuildDICOM(d *musetofda.MuseData) (dicom.Dataset, error) {
+func BuildDICOM(d *musetofda.MuseData, uids dicomconf.UIDs) (dicom.Dataset, error) {
 	ds := dicom.Dataset{}
 
-	// MUSE StudyUID is a UUID, not a valid DICOM UID — generate proper ones.
-	sopUID := newDicomUID()
-	studyUID := newDicomUID()
-	seriesUID := newDicomUID()
+	sopUID, studyUID, seriesUID := uids.SOP, uids.Study, uids.Series
 
 	// ─── File meta elements (group 0002) ────────────────────────────────────
 	add(&ds, tag.MediaStorageSOPClassUID, []string{sopClassUID12LeadECG})
@@ -54,6 +48,7 @@ func BuildDICOM(d *musetofda.MuseData) (dicom.Dataset, error) {
 	add(&ds, tag.PatientID, []string{d.PatientID})
 	add(&ds, tag.PatientSex, []string{d.PatientSex})
 	add(&ds, tag.PatientAge, []string{d.PatientAge})
+	add(&ds, tag.PatientBirthDate, []string{d.PatientDOB})
 	add(&ds, tag.StudyInstanceUID, []string{studyUID})
 	add(&ds, tag.SeriesInstanceUID, []string{seriesUID})
 	add(&ds, tag.StudyID, []string{"1"})
@@ -294,15 +289,6 @@ func numSamples(leads [12][]int16) int {
 		}
 	}
 	return max
-}
-
-// newDicomUID returns a valid DICOM UID derived from a random 128-bit
-// value using the "2.25.<integer>" scheme (DICOM PS3.5 §B.2).
-func newDicomUID() string {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	n := new(big.Int).SetBytes(b)
-	return "2.25." + n.String()
 }
 
 func add(ds *dicom.Dataset, t tag.Tag, data any) {

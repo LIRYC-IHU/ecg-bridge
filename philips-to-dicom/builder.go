@@ -16,17 +16,17 @@ const (
 )
 
 // BuildDICOM constructs a DICOM dataset from PhilipsData.
-func BuildDICOM(d *PhilipsData) (dicom.Dataset, error) {
+func BuildDICOM(d *PhilipsData, uids dicomconf.UIDs) (dicom.Dataset, error) {
 	ds := dicom.Dataset{}
 
 	// ─── File meta elements (group 0002) ────────────────────────────────────
 	add(&ds, tag.MediaStorageSOPClassUID, []string{sopClassUID12LeadECG})
-	add(&ds, tag.MediaStorageSOPInstanceUID, []string{d.StudyUID})
+	add(&ds, tag.MediaStorageSOPInstanceUID, []string{uids.SOP})
 	add(&ds, tag.TransferSyntaxUID, []string{transferSyntaxExplicitLE})
 
 	// ─── Patient / study / device ───────────────────────────────────────────
 	add(&ds, tag.SOPClassUID, []string{sopClassUID12LeadECG})
-	add(&ds, tag.SOPInstanceUID, []string{d.StudyUID})
+	add(&ds, tag.SOPInstanceUID, []string{uids.SOP})
 	add(&ds, tag.Modality, []string{"ECG"})
 	add(&ds, tag.StudyDate, []string{d.StudyDate})
 	add(&ds, tag.StudyTime, []string{d.StudyTime})
@@ -42,8 +42,9 @@ func BuildDICOM(d *PhilipsData) (dicom.Dataset, error) {
 	add(&ds, tag.PatientID, []string{d.PatientID})
 	add(&ds, tag.PatientSex, []string{d.PatientSex})
 	add(&ds, tag.PatientAge, []string{d.PatientAge})
-	add(&ds, tag.StudyInstanceUID, []string{d.StudyUID})
-	add(&ds, tag.SeriesInstanceUID, []string{d.StudyUID + ".1"})
+	add(&ds, tag.PatientBirthDate, []string{d.PatientDOB})
+	add(&ds, tag.StudyInstanceUID, []string{uids.Study})
+	add(&ds, tag.SeriesInstanceUID, []string{uids.Series})
 	add(&ds, tag.StudyID, []string{"1"})
 	add(&ds, tag.SeriesNumber, []string{"1"})
 	add(&ds, tag.InstanceNumber, []string{"1"})

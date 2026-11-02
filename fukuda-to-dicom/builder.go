@@ -1,7 +1,6 @@
 package fukudatodicom
 
 import (
-	"crypto/rand"
 	"fmt"
 
 	dicomconf "github.com/LIRYC-IHU/ecg-bridge/dicomconf"
@@ -12,12 +11,10 @@ import (
 )
 
 // BuildDICOM constructs a 12-lead ECG DICOM dataset from Fukuda data.
-func BuildDICOM(fd *fukudatofda.FukudaData) (*dicom.Dataset, error) {
+func BuildDICOM(fd *fukudatofda.FukudaData, uids dicomconf.UIDs) (*dicom.Dataset, error) {
 	ds := &dicom.Dataset{}
 
-	studyUID := newUID()
-	seriesUID := newUID()
-	sopUID := newUID()
+	studyUID, seriesUID, sopUID := uids.Study, uids.Series, uids.SOP
 
 	// File Meta / Transfer Syntax: Explicit VR Little Endian.
 	ds.Elements = append(ds.Elements,
@@ -41,6 +38,7 @@ func BuildDICOM(fd *fukudatofda.FukudaData) (*dicom.Dataset, error) {
 		mustElem(tag.PatientName, []string{fullName}),
 		mustElem(tag.PatientID, []string{fd.Patient.PatientID}),
 		mustElem(tag.PatientSex, []string{fd.Patient.Gender}),
+		mustElem(tag.PatientBirthDate, []string{fd.Patient.BirthDate}),
 	)
 
 	// General Study Module.
@@ -53,6 +51,10 @@ func BuildDICOM(fd *fukudatofda.FukudaData) (*dicom.Dataset, error) {
 		mustElem(tag.StudyInstanceUID, []string{studyUID}),
 		mustElem(tag.StudyDate, []string{studyDate}),
 		mustElem(tag.StudyTime, []string{studyTime}),
+		mustElem(tag.StudyID, []string{"1"}),
+		mustElem(tag.ContentDate, []string{studyDate}),
+		mustElem(tag.ContentTime, []string{studyTime}),
+		mustElem(tag.AcquisitionDateTime, []string{studyDate + studyTime}),
 		mustElem(tag.AccessionNumber, []string{fd.Patient.PatientID}),
 	)
 
@@ -277,14 +279,6 @@ func interleaveLeads(leads [][]int32, nSamples int) []byte {
 		out[i*2+1] = byte((v >> 8) & 0xFF)
 	}
 	return out
-}
-
-func newUID() string {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	return fmt.Sprintf("2.25.%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d",
-		b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
-		b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15])
 }
 
 func mustElem(t tag.Tag, data any) *dicom.Element {
