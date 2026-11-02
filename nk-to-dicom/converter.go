@@ -39,7 +39,7 @@ func Convert(inputPath, outputPath string, anonymize bool, meta *metaject.Overri
 	nd.Leads = leads
 
 	// 3. Build DICOM dataset
-	ds, err := BuildDICOM(nd)
+	ds, err := BuildDICOM(nd, dicomconf.DeriveUIDs(dat, anonymize))
 	if err != nil {
 		return fmt.Errorf("building DICOM: %w", err)
 	}

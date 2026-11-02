@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
+	dicomconf "github.com/LIRYC-IHU/ecg-bridge/dicomconf"
 	"github.com/LIRYC-IHU/ecg-bridge/metaject"
 )
 
@@ -29,7 +29,7 @@ type PhilipsData struct {
 	// Study / acquisition
 	StudyDate string // YYYYMMDD
 	StudyTime string // HHMMSS
-	StudyUID  string // generated OID
+	StudyUID  string // derived from the source bytes (dicomconf.DeriveUIDs)
 
 	// Device
 	Manufacturer    string
@@ -166,7 +166,7 @@ func ParsePhilips(path string) (*PhilipsData, error) {
 	// Study date/time
 	d.StudyDate = formatDate(px.DataAcq.Date)
 	d.StudyTime = formatTime(px.DataAcq.Time)
-	d.StudyUID = fmt.Sprintf("2.25.%d", time.Now().UnixNano())
+	d.StudyUID = dicomconf.DeriveUIDs(raw, false).Study
 
 	// Device
 	d.Manufacturer = "Philips Medical Systems"

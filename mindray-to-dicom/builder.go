@@ -18,10 +18,9 @@ const (
 
 var leadOrder = [12]string{"I", "II", "III", "aVR", "aVL", "aVF", "V1", "V2", "V3", "V4", "V5", "V6"}
 
-func BuildDICOM(md *mindraytofda.MindrayData) (dicom.Dataset, error) {
+func BuildDICOM(md *mindraytofda.MindrayData, uids dicomconf.UIDs) (dicom.Dataset, error) {
 	ds := dicom.Dataset{}
 
-	studyUID := buildStudyUID(md)
 	studyDate := ""
 	studyTime := ""
 	if !md.Patient.StartTime.IsZero() {
@@ -31,12 +30,12 @@ func BuildDICOM(md *mindraytofda.MindrayData) (dicom.Dataset, error) {
 
 	// File meta
 	add(&ds, tag.MediaStorageSOPClassUID, []string{sopClassUID12LeadECG})
-	add(&ds, tag.MediaStorageSOPInstanceUID, []string{studyUID})
+	add(&ds, tag.MediaStorageSOPInstanceUID, []string{uids.SOP})
 	add(&ds, tag.TransferSyntaxUID, []string{transferSyntaxExplicitLE})
 
 	// Patient / Study
 	add(&ds, tag.SOPClassUID, []string{sopClassUID12LeadECG})
-	add(&ds, tag.SOPInstanceUID, []string{studyUID})
+	add(&ds, tag.SOPInstanceUID, []string{uids.SOP})
 	add(&ds, tag.Modality, []string{"ECG"})
 	add(&ds, tag.StudyDate, []string{studyDate})
 	add(&ds, tag.StudyTime, []string{studyTime})
@@ -51,8 +50,8 @@ func BuildDICOM(md *mindraytofda.MindrayData) (dicom.Dataset, error) {
 	add(&ds, tag.PatientName, []string{md.Patient.Name})
 	add(&ds, tag.PatientID, []string{md.Patient.PatientID})
 	add(&ds, tag.PatientSex, []string{dicomGender(md.Patient.Gender)})
-	add(&ds, tag.StudyInstanceUID, []string{studyUID})
-	add(&ds, tag.SeriesInstanceUID, []string{studyUID + ".1"})
+	add(&ds, tag.StudyInstanceUID, []string{uids.Study})
+	add(&ds, tag.SeriesInstanceUID, []string{uids.Series})
 	add(&ds, tag.StudyID, []string{"1"})
 	add(&ds, tag.SeriesNumber, []string{"1"})
 	add(&ds, tag.InstanceNumber, []string{"1"})
@@ -255,27 +254,6 @@ func findNumSamples(leads map[string][]int) int {
 		}
 	}
 	return max
-}
-
-func buildStudyUID(md *mindraytofda.MindrayData) string {
-	base := "1.2.840.113619.2.755"
-	serial := stripDigits(md.Device.SerialNumber)
-	if !md.Patient.StartTime.IsZero() {
-		t := md.Patient.StartTime
-		return fmt.Sprintf("%s.%s.%d%02d%02d%02d%02d%02d",
-			base, serial, t.Year(), int(t.Month()), t.Day(), t.Hour(), t.Minute(), t.Second())
-	}
-	return fmt.Sprintf("%s.%s", base, serial)
-}
-
-func stripDigits(s string) string {
-	var out []byte
-	for i := 0; i < len(s); i++ {
-		if s[i] >= '0' && s[i] <= '9' {
-			out = append(out, s[i])
-		}
-	}
-	return string(out)
 }
 
 func dicomGender(g string) string {

@@ -31,7 +31,7 @@ func Convert(inputPath, outputPath string, anonymize bool, meta *metaject.Overri
 	}
 	d.ApplyMetadata(meta)
 
-	ds, err := BuildDICOM(d)
+	ds, err := BuildDICOM(d, dicomconf.DeriveUIDs(data, anonymize))
 	if err != nil {
 		return fmt.Errorf("building DICOM: %w", err)
 	}

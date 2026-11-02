@@ -23,6 +23,10 @@ func Convert(inputPath, outputPath string) error {
 
 // ConvertWithOptions is like Convert but accepts additional options.
 func ConvertWithOptions(inputPath, outputPath string, opts Options) error {
+	raw, err := os.ReadFile(inputPath)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", inputPath, err)
+	}
 	data, err := ParsePhilips(inputPath)
 	if err != nil {
 		return fmt.Errorf("parsing Philips XML: %w", err)
@@ -33,7 +37,7 @@ func ConvertWithOptions(inputPath, outputPath string, opts Options) error {
 	}
 	data.ApplyMetadata(opts.Meta)
 
-	ds, err := BuildDICOM(data)
+	ds, err := BuildDICOM(data, dicomconf.DeriveUIDs(raw, opts.Anonymize))
 	if err != nil {
 		return fmt.Errorf("building DICOM: %w", err)
 	}
