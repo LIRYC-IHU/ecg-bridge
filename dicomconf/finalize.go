@@ -9,6 +9,7 @@ package dicomconf
 
 import (
 	"sort"
+	"unicode/utf8"
 
 	"github.com/suyashkumar/dicom"
 	"github.com/suyashkumar/dicom/pkg/tag"
@@ -23,9 +24,10 @@ const (
 	// implementationVersionName is File Meta (0002,0013), Type 3.
 	implementationVersionName = "ECGHUB-CONV-1"
 
-	// defaultCharacterSet declares Latin-1 so accented patient names are
-	// interpreted correctly by receivers (0008,0005).
-	defaultCharacterSet = "ISO_IR 100"
+	// defaultCharacterSet declares UTF-8 (0008,0005). suyashkumar/dicom writes
+	// Go strings as raw bytes, so the declaration must match Go's encoding;
+	// Finalize transcodes any non-UTF-8 value so the declaration stays true.
+	defaultCharacterSet = "ISO_IR 192"
 
 	vrOtherWord = "OW"
 )
@@ -75,6 +77,7 @@ func fixupElements(elems []*dicom.Element) {
 		if e.Tag == tag.WaveformData {
 			e.RawValueRepresentation = vrOtherWord
 		}
+		fixupStrings(e)
 		if e.Value == nil || e.Value.ValueType() != dicom.Sequences {
 			continue
 		}
@@ -101,4 +104,40 @@ func sortElements(elems []*dicom.Element) {
 		}
 		return a.Element < b.Element
 	})
+}
+
+// fixupStrings re-encodes string values that are not valid UTF-8. Such values
+// come from binary device formats (Mindray, NK) that copy raw bytes; they are
+// read as Latin-1, the encoding those French-configured devices use.
+func fixupStrings(e *dicom.Element) {
+	if e.Value == nil || e.Value.ValueType() != dicom.Strings {
+		return
+	}
+	vals, ok := e.Value.GetValue().([]string)
+	if !ok {
+		return
+	}
+	changed := false
+	out := make([]string, len(vals))
+	for i, v := range vals {
+		out[i] = v
+		if !utf8.ValidString(v) {
+			out[i] = latin1ToUTF8(v)
+			changed = true
+		}
+	}
+	if !changed {
+		return
+	}
+	if nv, err := dicom.NewValue(out); err == nil {
+		e.Value = nv
+	}
+}
+
+func latin1ToUTF8(s string) string {
+	r := make([]rune, len(s))
+	for i := 0; i < len(s); i++ {
+		r[i] = rune(s[i])
+	}
+	return string(r)
 }
